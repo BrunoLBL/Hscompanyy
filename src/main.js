@@ -14,6 +14,7 @@ import { renderFinancial } from './modules/financial.js';
 import { renderInventory } from './modules/inventory.js';
 import { renderReports } from './modules/reports.js';
 import { renderSettings } from './modules/settings.js';
+import { renderWhatsapp } from './modules/whatsapp.js';
 
 // Initialize
 initStore();
@@ -34,6 +35,7 @@ registerRoute('/financeiro', renderFinancial);
 registerRoute('/estoque', renderInventory);
 registerRoute('/relatorios', renderReports);
 registerRoute('/configuracoes', renderSettings);
+registerRoute('/whatsapp', renderWhatsapp);
 
 // Start router
 initRouter();

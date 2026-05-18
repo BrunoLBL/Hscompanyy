@@ -31,6 +31,7 @@ export function renderSidebar() {
         <a class="nav-item" data-route="/financeiro" href="#/financeiro">${icon('dollar')}<span>Financeiro</span></a>
         <a class="nav-item" data-route="/estoque" href="#/estoque">${icon('package')}<span>Estoque</span></a>
         <a class="nav-item" data-route="/relatorios" href="#/relatorios">${icon('chart')}<span>Relatórios</span></a>
+        <a class="nav-item" data-route="/whatsapp" href="#/whatsapp">${icon('messageCircle')}<span>WhatsApp</span></a>
       </div>
       <div class="nav-section">
         <div class="nav-section-title">Sistema</div>
