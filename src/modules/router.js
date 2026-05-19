@@ -1,3 +1,5 @@
+import { getCurrentUser } from './store.js';
+
 const routes = {};
 let currentRoute = null;
 
@@ -9,10 +11,17 @@ export function navigate(path) {
 
 export function initRouter() {
   function handleRoute() {
-    const hash = window.location.hash.slice(1) || '/';
-    const parts = hash.split('/').filter(Boolean);
-    const path = '/' + (parts[0] || '');
+    let hash = window.location.hash.slice(1) || '/';
+    let parts = hash.split('/').filter(Boolean);
+    let path = '/' + (parts[0] || '');
     const params = parts.slice(1);
+    
+    // Guard restrict routes
+    const currentUser = getCurrentUser();
+    if (currentUser !== 'Administrador' && (path === '/financeiro' || path === '/relatorios')) {
+      window.location.hash = '/';
+      return;
+    }
     
     // Update active nav
     document.querySelectorAll('.nav-item').forEach(el => {

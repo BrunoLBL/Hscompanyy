@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatCurrency, formatDate, isToday } from '../utils/helpers.js';
-import { getPatients, getAppointments, getTransactions, getInventory } from '../modules/store.js';
+import { getPatients, getAppointments, getTransactions, getInventory, getCurrentUser } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables);
@@ -15,6 +15,9 @@ export function renderDashboard(container) {
   const appointments = getAppointments();
   const transactions = getTransactions();
   const inventory = getInventory();
+  
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser === 'Administrador';
   
   const activePatients = patients.filter(p => p.status === 'active').length;
   const todayAppts = appointments.filter(a => isToday(a.date) && a.status !== 'cancelled');
@@ -33,7 +36,7 @@ export function renderDashboard(container) {
     <div class="page-title-bar">
       <div><h2>Dashboard</h2><p>Visão geral da sua clínica</p></div>
       <div style="display:flex;gap:10px">
-        <button class="btn btn-secondary btn-sm" onclick="location.hash='#/relatorios'">${icon('chart',16)} Relatórios</button>
+        ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="location.hash='#/relatorios'">${icon('chart',16)} Relatórios</button>` : ''}
       </div>
     </div>
     
@@ -50,24 +53,28 @@ export function renderDashboard(container) {
           <div class="kpi-trend up">${icon('clock',14)} ${todayAppts.filter(a=>a.status==='confirmed').length} confirmadas</div>
         </div>
       </div>
+      ${isAdmin ? `
       <div class="card kpi-card">
         <div class="kpi-icon" style="background:rgba(245,166,35,.1);color:var(--accent-warn)">${icon('dollar',24)}</div>
         <div class="kpi-info"><h3>${formatCurrency(monthIncome)}</h3><span>Receita do Mês</span>
           <div class="kpi-trend ${monthIncome>monthExpense?'up':'down'}">${icon(monthIncome>monthExpense?'trendUp':'trendDown',14)} Lucro: ${formatCurrency(monthIncome-monthExpense)}</div>
         </div>
       </div>
+      ` : ''}
       <div class="card kpi-card">
         <div class="kpi-icon" style="background:rgba(231,76,60,.1);color:var(--accent-danger)">${icon('alertCircle',24)}</div>
-        <div class="kpi-info"><h3>${lowStock + pendingPayments}</h3><span>Alertas</span>
-          <div class="kpi-trend down">${lowStock} estoque · ${pendingPayments} pgto</div>
+        <div class="kpi-info"><h3>${lowStock + (isAdmin ? pendingPayments : 0)}</h3><span>Alertas</span>
+          <div class="kpi-trend down">${lowStock} estoque ${isAdmin ? `· ${pendingPayments} pgto` : ''}</div>
         </div>
       </div>
     </div>
 
+    ${isAdmin ? `
     <div class="charts-grid">
       <div class="card chart-card"><h4>Fluxo de Caixa — Últimos 6 Meses</h4><div class="chart-canvas-wrap"><canvas id="cashFlowChart"></canvas></div></div>
       <div class="card chart-card"><h4>Receita por Categoria</h4><div class="chart-canvas-wrap"><canvas id="categoryChart"></canvas></div></div>
     </div>
+    ` : ''}
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
       <div class="card">
@@ -95,7 +102,7 @@ export function renderDashboard(container) {
             <div><div style="font-weight:600;font-size:.82rem;color:var(--accent-danger)">${lowStock} itens com estoque baixo</div>
             <div style="font-size:.72rem;color:var(--text-muted)">Verifique o estoque e faça a reposição</div></div>
           </div>` : ''}
-          ${pendingPayments > 0 ? `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--radius-sm);background:rgba(245,166,35,.06);cursor:pointer" onclick="location.hash='#/financeiro'">
+          ${isAdmin && pendingPayments > 0 ? `<div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--radius-sm);background:rgba(245,166,35,.06);cursor:pointer" onclick="location.hash='#/financeiro'">
             <div style="color:var(--accent-warn)">${icon('clock',18)}</div>
             <div><div style="font-weight:600;font-size:.82rem;color:var(--accent-warn)">${pendingPayments} pagamentos pendentes</div>
             <div style="font-size:.72rem;color:var(--text-muted)">Revise os pagamentos em aberto</div></div>
@@ -110,59 +117,61 @@ export function renderDashboard(container) {
     </div>
   `;
 
-  // Cash Flow Chart
-  const months = [];
-  const incomes = [];
-  const expenses = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(d.toLocaleDateString('pt-BR', { month: 'short' }));
-    const mt = transactions.filter(t => {
-      const td = new Date(t.date);
-      return td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear();
-    });
-    incomes.push(mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
-    expenses.push(mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
-  }
+  if (isAdmin) {
+    // Cash Flow Chart
+    const months = [];
+    const incomes = [];
+    const expenses = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(d.toLocaleDateString('pt-BR', { month: 'short' }));
+      const mt = transactions.filter(t => {
+        const td = new Date(t.date);
+        return td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear();
+      });
+      incomes.push(mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
+      expenses.push(mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
+    }
 
-  const ctx1 = document.getElementById('cashFlowChart');
-  if (ctx1) {
-    charts.push(new Chart(ctx1, {
-      type: 'bar',
-      data: {
-        labels: months,
-        datasets: [
-          { label: 'Receitas', data: incomes, backgroundColor: 'rgba(30,111,217,.7)', borderRadius: 6, barPercentage: .4 },
-          { label: 'Despesas', data: expenses, backgroundColor: 'rgba(231,76,60,.6)', borderRadius: 6, barPercentage: .4 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { family: 'Inter', size: 12 } } } },
-        scales: { y: { beginAtZero: true, ticks: { callback: v => 'R$ ' + (v / 1000).toFixed(0) + 'k', font: { family: 'Inter' } }, grid: { color: 'rgba(0,0,0,.04)' } }, x: { grid: { display: false }, ticks: { font: { family: 'Inter' } } } }
-      }
-    }));
-  }
+    const ctx1 = document.getElementById('cashFlowChart');
+    if (ctx1) {
+      charts.push(new Chart(ctx1, {
+        type: 'bar',
+        data: {
+          labels: months,
+          datasets: [
+            { label: 'Receitas', data: incomes, backgroundColor: 'rgba(30,111,217,.7)', borderRadius: 6, barPercentage: .4 },
+            { label: 'Despesas', data: expenses, backgroundColor: 'rgba(231,76,60,.6)', borderRadius: 6, barPercentage: .4 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { family: 'Inter', size: 12 } } } },
+          scales: { y: { beginAtZero: true, ticks: { callback: v => 'R$ ' + (v / 1000).toFixed(0) + 'k', font: { family: 'Inter' } }, grid: { color: 'rgba(0,0,0,.04)' } }, x: { grid: { display: false }, ticks: { font: { family: 'Inter' } } } }
+        }
+      }));
+    }
 
-  // Category Chart
-  const cats = {};
-  thisMonth.filter(t => t.type === 'income').forEach(t => { cats[t.description] = (cats[t.description] || 0) + t.amount; });
-  const catLabels = Object.keys(cats).slice(0, 6);
-  const catValues = catLabels.map(k => cats[k]);
-  const catColors = ['#1E6FD9', '#00C48C', '#F5A623', '#E74C3C', '#9B59B6', '#1ABC9C'];
+    // Category Chart
+    const cats = {};
+    thisMonth.filter(t => t.type === 'income').forEach(t => { cats[t.description] = (cats[t.description] || 0) + t.amount; });
+    const catLabels = Object.keys(cats).slice(0, 6);
+    const catValues = catLabels.map(k => cats[k]);
+    const catColors = ['#1E6FD9', '#00C48C', '#F5A623', '#E74C3C', '#9B59B6', '#1ABC9C'];
 
-  const ctx2 = document.getElementById('categoryChart');
-  if (ctx2) {
-    charts.push(new Chart(ctx2, {
-      type: 'doughnut',
-      data: {
-        labels: catLabels,
-        datasets: [{ data: catValues, backgroundColor: catColors, borderWidth: 0, hoverOffset: 8 }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout: '65%',
-        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 10, font: { family: 'Inter', size: 11 } } } }
-      }
-    }));
+    const ctx2 = document.getElementById('categoryChart');
+    if (ctx2) {
+      charts.push(new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+          labels: catLabels,
+          datasets: [{ data: catValues, backgroundColor: catColors, borderWidth: 0, hoverOffset: 8 }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '65%',
+          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 10, font: { family: 'Inter', size: 11 } } } }
+        }
+      }));
+    }
   }
 }

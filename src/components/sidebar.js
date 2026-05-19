@@ -1,12 +1,15 @@
 import { icon } from '../utils/icons.js';
 import { navigate } from '../modules/router.js';
-import { getAppointments } from '../modules/store.js';
+import { getAppointments, getCurrentUser } from '../modules/store.js';
 import { isToday } from '../utils/helpers.js';
 
 export function renderSidebar() {
   const sidebar = document.getElementById('sidebar');
   const todayAppts = getAppointments().filter(a => isToday(a.date) && a.status !== 'cancelled').length;
   
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser === 'Administrador';
+
   sidebar.innerHTML = `
     <div class="sidebar-logo">
       <svg viewBox="0 0 40 40" width="40" height="40">
@@ -28,9 +31,9 @@ export function renderSidebar() {
       </div>
       <div class="nav-section">
         <div class="nav-section-title">Gestão</div>
-        <a class="nav-item" data-route="/financeiro" href="#/financeiro">${icon('dollar')}<span>Financeiro</span></a>
+        ${isAdmin ? `<a class="nav-item" data-route="/financeiro" href="#/financeiro">${icon('dollar')}<span>Financeiro</span></a>` : ''}
         <a class="nav-item" data-route="/estoque" href="#/estoque">${icon('package')}<span>Estoque</span></a>
-        <a class="nav-item" data-route="/relatorios" href="#/relatorios">${icon('chart')}<span>Relatórios</span></a>
+        ${isAdmin ? `<a class="nav-item" data-route="/relatorios" href="#/relatorios">${icon('chart')}<span>Relatórios</span></a>` : ''}
         <a class="nav-item" data-route="/whatsapp" href="#/whatsapp">${icon('messageCircle')}<span>WhatsApp</span></a>
       </div>
       <div class="nav-section">

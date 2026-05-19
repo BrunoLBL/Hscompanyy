@@ -15,6 +15,13 @@ export function initStore() {
   return _data;
 }
 
+export function getCurrentUser() {
+  return localStorage.getItem('hscorp_user') || 'Administrador';
+}
+export function setCurrentUser(role) {
+  localStorage.setItem('hscorp_user', role);
+}
+
 export function getData() { if (!_data) initStore(); return _data; }
 
 export function getPatients() { return getData().patients || []; }

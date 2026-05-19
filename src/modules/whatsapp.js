@@ -20,12 +20,11 @@ export function renderWhatsapp() {
       </div>
     </div>
 
-    <div style="background: rgba(245, 166, 35, 0.1); border-left: 4px solid var(--accent-warn); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-start;">
-      <div style="color: var(--accent-warn);">${icon('alertCircle')}</div>
-      <div>
-        <h4 style="margin-bottom: 4px; font-weight: 600; color: #92400E;">Atenção: Permita Pop-ups!</h4>
-        <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">Para que o envio automático funcione, este sistema abrirá várias abas do WhatsApp Web em sequência. <strong>Você precisa permitir pop-ups para este site no seu navegador.</strong> Um intervalo de 3 segundos será aplicado entre cada envio para evitar bloqueios.</p>
-      </div>
+    <div id="wa-connection-status" style="margin-bottom: 24px; padding: 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); text-align: center;">
+      <h3 style="margin-bottom: 8px;">Status do WhatsApp</h3>
+      <div id="wa-status-text">Verificando conexão...</div>
+      <img id="wa-qr-image" src="" alt="QR Code" style="display: none; margin: 16px auto; max-width: 200px;" />
+      <button id="wa-refresh-btn" class="btn btn-secondary" style="margin-top: 12px; display: none;">Atualizar Status</button>
     </div>
 
     <div class="charts-grid" style="grid-template-columns: 1fr 350px;">
@@ -118,9 +117,68 @@ export function renderWhatsapp() {
   const btnSend = document.getElementById('btn-wa-send');
   const messageInput = document.getElementById('wa-message');
   
+  // Elementos de status
+  const statusText = document.getElementById('wa-status-text');
+  const qrImage = document.getElementById('wa-qr-image');
+  const refreshBtn = document.getElementById('wa-refresh-btn');
+  
   let filteredPatients = [];
   let selectedIds = new Set();
   
+  async function checkServerStatus() {
+    if (!document.getElementById('wa-status-text')) {
+      return; 
+    }
+    
+    try {
+      const res = await fetch('http://localhost:3001/api/whatsapp/status');
+      const data = await res.json();
+      
+      const statusText = document.getElementById('wa-status-text');
+      const qrImage = document.getElementById('wa-qr-image');
+      
+      if (data.ready) {
+        statusText.innerHTML = '<span style="color: var(--accent-success); font-weight: bold;">✅ Conectado e Pronto!</span>';
+        qrImage.style.display = 'none';
+        btnSend.disabled = false;
+        btnSend.style.opacity = '1';
+      } else if (data.qr) {
+        statusText.innerHTML = '<span style="color: var(--accent-warn); font-weight: bold;">Aguardando leitura do QR Code</span>';
+        qrImage.src = data.qr;
+        qrImage.style.display = 'block';
+        btnSend.disabled = true;
+        btnSend.style.opacity = '0.5';
+      } else {
+        statusText.innerHTML = '<span>Inicializando sessão do WhatsApp, aguarde...</span>';
+        qrImage.style.display = 'none';
+        btnSend.disabled = true;
+        btnSend.style.opacity = '0.5';
+      }
+    } catch (err) {
+      const statusText = document.getElementById('wa-status-text');
+      const qrImage = document.getElementById('wa-qr-image');
+      if (statusText) {
+        statusText.innerHTML = '<span style="color: var(--accent-danger); font-weight: bold;">❌ Erro ao conectar. O servidor (npm run server) está rodando?</span>';
+        qrImage.style.display = 'none';
+        btnSend.disabled = true;
+        btnSend.style.opacity = '0.5';
+      }
+    }
+  }
+
+  // Atualizar manualmente e tbm por polling
+  refreshBtn.addEventListener('click', checkServerStatus);
+  let pollInterval = setInterval(checkServerStatus, 3000);
+  checkServerStatus();
+
+  const observer = new MutationObserver((mutations) => {
+    if (!document.body.contains(btnSend)) {
+      clearInterval(pollInterval);
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
   function formatPhone(phone) {
     if (!phone) return '-';
     let p = phone.replace(/\D/g, '');
@@ -142,7 +200,6 @@ export function renderWhatsapp() {
     
     totalFilteredEl.textContent = filteredPatients.length;
     
-    // Atualiza a seleção (remove os que não estão mais no filtro)
     const filteredIds = new Set(filteredPatients.map(p => p.id));
     for (let id of selectedIds) {
       if (!filteredIds.has(id)) selectedIds.delete(id);
@@ -168,7 +225,6 @@ export function renderWhatsapp() {
           `;
         }).join('');
         
-    // Re-bind checkboxes
     document.querySelectorAll('.wa-cb').forEach(cb => {
       cb.addEventListener('change', (e) => {
         const id = e.target.dataset.id;
@@ -178,7 +234,6 @@ export function renderWhatsapp() {
       });
     });
     
-    // Atualiza o select all
     selectAllCb.checked = filteredPatients.length > 0 && selectedIds.size === filteredPatients.length;
   }
 
@@ -187,7 +242,6 @@ export function renderWhatsapp() {
     selectAllCb.checked = filteredPatients.length > 0 && selectedIds.size === filteredPatients.length;
   }
 
-  // Listeners de filtro
   searchInput.addEventListener('input', filterAndRender);
   statusSelect.addEventListener('change', filterAndRender);
   tagSelect.addEventListener('change', filterAndRender);
@@ -201,7 +255,6 @@ export function renderWhatsapp() {
     filterAndRender();
   });
 
-  // Disparo
   btnSend.addEventListener('click', async () => {
     if (selectedIds.size === 0) {
       showToast('Selecione pelo menos um paciente para enviar.', 'error');
@@ -220,65 +273,73 @@ export function renderWhatsapp() {
       return;
     }
 
-    if (!confirm(`Você está prestes a abrir ${targetPatients.length} abas do WhatsApp Web sequencialmente. Certifique-se de ter permitido os pop-ups do navegador. Deseja continuar?`)) {
+    if (!confirm(`Você está prestes a enviar ${targetPatients.length} mensagens em segundo plano pelo servidor local. Deseja continuar?`)) {
       return;
     }
 
-    // UI de Progresso
-    const progressContainer = document.getElementById('wa-progress-container');
-    const progressBar = document.getElementById('wa-progress-bar');
-    const progressText = document.getElementById('wa-progress-text');
-    
-    progressContainer.style.display = 'block';
     btnSend.disabled = true;
     btnSend.style.opacity = '0.7';
-    
-    let currentIndex = 0;
-    
-    function sendNext() {
-      if (currentIndex >= targetPatients.length) {
-        showToast('Disparo concluído!', 'success');
-        setTimeout(() => {
-          progressContainer.style.display = 'none';
-          progressBar.style.width = '0%';
-          btnSend.disabled = false;
-          btnSend.style.opacity = '1';
-        }, 2000);
-        return;
-      }
 
-      const p = targetPatients[currentIndex];
-      
-      // Personalizar mensagem
+    const messages = targetPatients.map(p => {
       let msg = baseMessage;
       const firstName = p.name.split(' ')[0];
       msg = msg.replace(/\[nome\]/g, p.name);
       msg = msg.replace(/\[primeiro_nome\]/g, firstName);
       
-      // Limpar número (adicionar 55 do Brasil se necessário, assumindo DDI 55)
       let phoneNum = p.phone.replace(/\D/g, '');
       if (phoneNum.length === 10 || phoneNum.length === 11) {
         phoneNum = '55' + phoneNum;
       }
+      return { phone: phoneNum, text: msg };
+    });
+
+    try {
+      const response = await fetch('http://localhost:3001/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages })
+      });
+      const data = await response.json();
       
-      const url = `https://wa.me/${phoneNum}?text=${encodeURIComponent(msg)}`;
+      if (!response.ok) {
+        showToast(data.error || 'Erro ao enviar requisição.', 'error');
+        btnSend.disabled = false;
+        btnSend.style.opacity = '1';
+        return;
+      }
+
+      showToast('Envio automático iniciado no servidor!', 'success');
       
-      // Abre a aba
-      window.open(url, '_blank');
+      const progressContainer = document.getElementById('wa-progress-container');
+      const progressBar = document.getElementById('wa-progress-bar');
+      const progressText = document.getElementById('wa-progress-text');
       
-      currentIndex++;
+      progressContainer.style.display = 'block';
+      let currentProgress = 0;
+      const total = targetPatients.length;
       
-      // Atualiza UI
-      progressText.textContent = `${currentIndex} / ${targetPatients.length}`;
-      progressBar.style.width = `${(currentIndex / targetPatients.length) * 100}%`;
-      
-      // Prepara o próximo envio (Intervalo de 3 segundos)
-      setTimeout(sendNext, 3000);
+      const interval = setInterval(() => {
+        currentProgress++;
+        if (currentProgress > total) {
+          clearInterval(interval);
+          setTimeout(() => {
+            progressContainer.style.display = 'none';
+            progressBar.style.width = '0%';
+            btnSend.disabled = false;
+            btnSend.style.opacity = '1';
+          }, 2000);
+          return;
+        }
+        progressText.textContent = `${currentProgress} / ${total}`;
+        progressBar.style.width = `${(currentProgress / total) * 100}%`;
+      }, 4000);
+
+    } catch (err) {
+      showToast('Erro ao contatar o servidor local.', 'error');
+      btnSend.disabled = false;
+      btnSend.style.opacity = '1';
     }
-    
-    sendNext();
   });
 
-  // Inicializa
   filterAndRender();
 }
