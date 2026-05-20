@@ -1,5 +1,6 @@
 import { icon } from '../utils/icons.js';
-import { getData, exportData, importData, resetStore, getCurrentUser, forceSync, lastSyncTime, syncStatus } from '../modules/store.js';
+import { getData, exportData, importData, resetStore, getCurrentUser, forceSync, lastSyncTime, syncStatus, saveAll } from '../modules/store.js';
+import { generateId } from '../utils/helpers.js';
 import { toast } from '../components/toast.js';
 
 export function renderSettings(container) {
@@ -28,8 +29,14 @@ export function renderSettings(container) {
       <div class="card">
         <h4 style="font-weight:600;margin-bottom:16px">${icon('settings',18)} Dados da Clínica</h4>
         ${isAdmin ? `<div class="form-group"><label>Nome da Clínica</label><input type="text" id="clinicName" value="${settings.clinicName||'HS Corp'}"/></div>` : ''}
-        <div class="form-group"><label>Dentistas (um por linha)</label>
-          <textarea id="clinicDentists" rows="4">${(settings.dentists||[]).join('\n')}</textarea></div>
+        <div class="form-group">
+          <label>Dentistas Cadastrados</label>
+          <div id="dentistsList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="newDentistName" placeholder="Nome do dentista..." style="flex:1;">
+            <button class="btn btn-secondary btn-sm" id="addDentistBtn">${icon('plus', 14)} Adicionar</button>
+          </div>
+        </div>
         <button class="btn btn-primary btn-sm" id="saveSettings">${icon('check',14)} Salvar</button>
       </div>
 
@@ -87,16 +94,104 @@ export function renderSettings(container) {
     </div>
   `;
 
+  // ─── Dentistas ───────────────────────────────────────────
+  let currentDentists = [...(settings.dentists || [])];
+
+  function resizeImage(file, maxWidth, maxHeight) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxWidth) { height = Math.round(height * (maxWidth / width)); width = maxWidth; }
+          } else {
+            if (height > maxHeight) { width = Math.round(width * (maxHeight / height)); height = maxHeight; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderDentistsList() {
+    const listEl = document.getElementById('dentistsList');
+    if (!listEl) return;
+    listEl.innerHTML = currentDentists.map(d => `
+      <div class="dentist-item" data-id="${d.id}" style="display:flex;align-items:center;gap:12px;padding:8px;background:var(--bg-lighter);border:1px solid var(--border);border-radius:var(--radius-sm);">
+        <div style="position:relative;width:40px;height:40px;border-radius:50%;background:var(--border);overflow:hidden;flex-shrink:0;">
+          ${d.photo ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--text-muted);font-weight:bold;">${d.name.charAt(0)}</div>`}
+          <label style="position:absolute;bottom:0;right:0;background:var(--primary);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Alterar foto">
+            ${icon('edit', 10)}
+            <input type="file" class="dentist-photo-input" data-id="${d.id}" accept="image/*" style="display:none;">
+          </label>
+        </div>
+        <div style="flex:1;font-weight:600;">${d.name}</div>
+        <button class="btn btn-icon btn-danger btn-sm remove-dentist-btn" data-id="${d.id}" title="Remover dentista">${icon('trash', 14)}</button>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.remove-dentist-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const id = e.currentTarget.dataset.id;
+        currentDentists = currentDentists.filter(d => d.id !== id);
+        renderDentistsList();
+      };
+    });
+
+    listEl.querySelectorAll('.dentist-photo-input').forEach(input => {
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const id = e.target.dataset.id;
+        try {
+          const base64 = await resizeImage(file, 120, 120);
+          const idx = currentDentists.findIndex(d => d.id === id);
+          if (idx >= 0) currentDentists[idx].photo = base64;
+          renderDentistsList();
+        } catch (err) {
+          toast.error('Erro ao processar imagem');
+        }
+      };
+    });
+  }
+
+  const addBtn = container.querySelector('#addDentistBtn');
+  if (addBtn) {
+    addBtn.onclick = () => {
+      const input = container.querySelector('#newDentistName');
+      const name = input.value.trim();
+      if (!name) return;
+      currentDentists.push({ id: generateId(), name, photo: null });
+      input.value = '';
+      renderDentistsList();
+    };
+  }
+
+  // Initial render
+  renderDentistsList();
+
   // ─── Salvar configurações ───────────────────────────────────────────
   document.getElementById('saveSettings').onclick = () => {
     data.settings = {
       ...settings,
-      dentists: document.getElementById('clinicDentists').value.split('\n').map(s=>s.trim()).filter(Boolean)
+      dentists: currentDentists
     };
     if (isAdmin) {
       data.settings.clinicName = document.getElementById('clinicName').value;
     }
-    localStorage.setItem('hscorp_data', JSON.stringify(data));
+    saveAll(data);
     toast.success('Configurações salvas!');
   };
 
@@ -201,7 +296,7 @@ async function loadBackupsList() {
           
           if (res.ok) {
             const { data } = await res.json();
-            localStorage.setItem('hscorp_data', JSON.stringify(data));
+            saveAll(data);
             toast.success('Backup restaurado! Recarregando...');
             setTimeout(() => location.reload(), 1000);
           } else {

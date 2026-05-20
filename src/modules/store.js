@@ -1,40 +1,63 @@
 import { generateId } from '../utils/helpers.js';
+import { createClient } from '@supabase/supabase-js';
 
 const STORE_KEY = 'hscorp_data';
+
+// Configuração do Supabase
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 function getAll() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || null; } catch { return null; }
 }
 
-// ─── Sincronização com servidor (arquivo no disco) ──────────────────
+// ─── Sincronização com Nuvem (Supabase) ──────────────────
 let _syncTimeout = null;
 export let lastSyncTime = null;
 export let syncStatus = 'idle'; // 'idle' | 'syncing' | 'success' | 'error'
+
+async function syncToSupabase(data) {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('app_state').upsert({ id: 1, data });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('Erro na sync Supabase:', err);
+    return false;
+  }
+}
+
+async function loadFromSupabase() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('app_state').select('data').eq('id', 1).single();
+    if (error && error.code !== 'PGRST116') throw error; // ignora row not found
+    return data?.data || null;
+  } catch (err) {
+    console.warn('Erro ao ler do Supabase:', err);
+    return null;
+  }
+}
 
 function syncToServer(data) {
   // Debounce: espera 2s sem novas alterações antes de sincronizar
   if (_syncTimeout) clearTimeout(_syncTimeout);
   _syncTimeout = setTimeout(async () => {
-    try {
-      syncStatus = 'syncing';
-      const res = await fetch('/api/data/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (res.ok) {
-        const result = await res.json();
-        lastSyncTime = result.timestamp;
+    syncStatus = 'syncing';
+    if (supabase) {
+      const ok = await syncToSupabase(data);
+      if (ok) {
+        lastSyncTime = new Date().toISOString();
         syncStatus = 'success';
-        console.log(`💾 Dados sincronizados com o servidor (${result.size})`);
+        console.log(`💾 Dados salvos no Supabase`);
       } else {
         syncStatus = 'error';
-        console.warn('⚠️ Falha ao sincronizar com servidor');
       }
-    } catch (err) {
-      syncStatus = 'error';
-      // Servidor pode não estar rodando (modo dev sem server)
-      console.warn('⚠️ Servidor indisponível para sincronização');
+    } else {
+      // Se não há Supabase, fica apenas no localStorage
+      syncStatus = 'success';
     }
   }, 2000);
 }
@@ -42,64 +65,69 @@ function syncToServer(data) {
 export async function forceSync() {
   const data = getAll();
   if (!data) return { success: false, error: 'Sem dados para sincronizar' };
-  try {
-    syncStatus = 'syncing';
-    const res = await fetch('/api/data/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    if (res.ok) {
-      const result = await res.json();
-      lastSyncTime = result.timestamp;
+  
+  syncStatus = 'syncing';
+  if (supabase) {
+    const ok = await syncToSupabase(data);
+    if (ok) {
+      lastSyncTime = new Date().toISOString();
       syncStatus = 'success';
-      return { success: true, timestamp: result.timestamp, size: result.size };
+      return { success: true, timestamp: lastSyncTime };
     }
     syncStatus = 'error';
-    return { success: false, error: 'Falha no servidor' };
-  } catch (err) {
-    syncStatus = 'error';
-    return { success: false, error: err.message };
+    return { success: false, error: 'Falha no Supabase' };
+  } else {
+    syncStatus = 'success';
+    return { success: true };
   }
 }
 
-function saveAll(data) {
+export function saveAll(data) {
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
-  syncToServer(data); // Sincroniza com servidor em background
+  syncToServer(data); // Sincroniza em background
 }
 
 let _data = null;
 
 export async function initStore() {
+  // 1. Tenta carregar do Supabase primeiro
+  if (supabase) {
+    const remoteData = await loadFromSupabase();
+    if (remoteData) {
+      _data = remoteData;
+      normalizeDentists(_data);
+      localStorage.setItem(STORE_KEY, JSON.stringify(_data));
+      console.log('✅ Dados carregados do Supabase');
+      return _data;
+    }
+  }
+
+  // 2. Fallback para localStorage
   _data = getAll();
   
   if (!_data) {
-    // localStorage vazio — tentar restaurar do servidor
-    try {
-      const res = await fetch('/api/data/load');
-      if (res.ok) {
-        const result = await res.json();
-        if (result.exists && result.data) {
-          _data = result.data;
-          localStorage.setItem(STORE_KEY, JSON.stringify(_data));
-          console.log('✅ Dados restaurados do servidor!');
-          return _data;
-        }
-      }
-    } catch (err) {
-      // Servidor indisponível — continua normalmente
-      console.warn('⚠️ Não foi possível restaurar dados do servidor');
-    }
-    
-    // Nenhum dado encontrado — criar dados demo
+    // 3. Se tudo falhar, gera demo
     _data = seedDemoData();
     saveAll(_data);
+    console.log('Criados dados demo de fallback.');
   } else {
-    // localStorage tem dados — fazer sync inicial em background
-    syncToServer(_data);
+    normalizeDentists(_data);
+    if (supabase) syncToServer(_data); // sob a nuvem se estiver vazia mas tiver local
   }
   
   return _data;
+}
+
+// Garante que o array de dentistas esteja no novo formato de objeto {id, name, photo}
+function normalizeDentists(data) {
+  if (data && data.settings && Array.isArray(data.settings.dentists)) {
+    data.settings.dentists = data.settings.dentists.map(d => {
+      if (typeof d === 'string') {
+        return { id: generateId(), name: d, photo: null };
+      }
+      return d;
+    });
+  }
 }
 
 export function getCurrentUser() {
@@ -216,7 +244,10 @@ function seedDemoData() {
   ].map(p => ({ ...p, createdAt: new Date(y, m - 3, 1).toISOString(), updatedAt: new Date().toISOString() }));
 
   const procedures = ['Limpeza','Restauração','Extração','Canal','Clareamento','Implante','Ortodontia','Prótese','Avaliação','Raio-X'];
-  const dentists = ['Dra. Helena Souza','Dr. Ricardo Mendes'];
+  const dentists = [
+    { id: generateId(), name: 'Dra. Helena Souza', photo: null },
+    { id: generateId(), name: 'Dr. Ricardo Mendes', photo: null }
+  ];
   const statuses = ['confirmed','pending','completed','cancelled'];
 
   const appointments = [];
@@ -233,7 +264,7 @@ function seedDemoData() {
         time: `${String(h).padStart(2,'0')}:${Math.random()>.5?'00':'30'}`,
         duration: 30 + Math.floor(Math.random() * 4) * 15,
         procedure: procedures[Math.floor(Math.random() * procedures.length)],
-        dentist: dentists[Math.floor(Math.random() * 2)],
+        dentist: dentists[Math.floor(Math.random() * dentists.length)].name,
         status: st, notes: ''
       });
     }
@@ -298,7 +329,13 @@ export function exportData() {
 }
 
 export function importData(jsonStr) {
-  try { const d = JSON.parse(jsonStr); _data = d; saveAll(d); return true; } catch { return false; }
+  try { 
+    const d = JSON.parse(jsonStr); 
+    normalizeDentists(d);
+    _data = d; 
+    saveAll(d); 
+    return true; 
+  } catch { return false; }
 }
 
 export function resetStore() {

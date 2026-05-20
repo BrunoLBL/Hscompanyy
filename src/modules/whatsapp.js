@@ -2,6 +2,8 @@ import { getPatients } from './store.js';
 import { icon } from '../utils/icons.js';
 import { showToast } from '../components/toast.js';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export function renderWhatsapp() {
   const container = document.getElementById('page-content');
   const patients = getPatients();
@@ -135,7 +137,7 @@ export function renderWhatsapp() {
     }
     
     try {
-      const res = await fetch('/api/whatsapp/status');
+      const res = await fetch(`${API_URL}/api/whatsapp/status`);
       const data = await res.json();
       
       const statusText = document.getElementById('wa-status-text');
@@ -185,7 +187,7 @@ export function renderWhatsapp() {
     restartBtn.disabled = true;
     restartBtn.textContent = '⏳ Reconectando...';
     try {
-      await fetch('/api/whatsapp/restart', { method: 'POST' });
+      await fetch(`${API_URL}/api/whatsapp/restart`, { method: 'POST' });
       showToast('Reinicializando WhatsApp... Aguarde o QR Code.', 'success');
     } catch (err) {
       showToast('Erro ao reconectar. Verifique se o servidor está rodando.', 'error');
@@ -307,6 +309,7 @@ export function renderWhatsapp() {
 
     btnSend.disabled = true;
     btnSend.style.opacity = '0.7';
+    btnSend.textContent = 'Enviando...';
 
     const messages = targetPatients.map(p => {
       let msg = baseMessage;
@@ -322,7 +325,7 @@ export function renderWhatsapp() {
     });
 
     try {
-      const response = await fetch('/api/whatsapp/send', {
+      const response = await fetch(`${API_URL}/api/whatsapp/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages })

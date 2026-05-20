@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatDate } from '../utils/helpers.js';
-import { getAttendances, saveAttendance, deleteAttendance, getPatients, saveTransaction, saveClinicalRecord } from './store.js';
+import { getAttendances, saveAttendance, deleteAttendance, getPatients, saveTransaction, saveClinicalRecord, getAppointments, saveAppointment, getData } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
@@ -28,6 +28,7 @@ export function renderAttendances(container) {
           </div>
           <div style="font-size:0.85rem; color:var(--text-muted); display:flex; flex-direction:column; gap:6px;">
             <div style="display:flex; align-items:center; gap:6px;">${icon('clock', 14)} Iniciado às ${new Date(a.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+            <div style="display:flex; align-items:center; gap:6px;">${icon('user', 14)} ${a.dentist || 'Recepção'}</div>
             <div style="display:flex; align-items:center; gap:6px;">${icon('fileText', 14)} ${a.procedure}</div>
             <div style="display:flex; align-items:center; gap:6px;">${icon('dollar', 14)} R$ ${Number(a.value).toFixed(2).replace('.', ',')}</div>
           </div>
@@ -53,53 +54,123 @@ export function renderAttendances(container) {
 function openNewAttendanceModal(parentContainer) {
   const patients = getPatients().filter(p => p.status === 'active');
   const procedures = ['Avaliação','Limpeza','Restauração','Extração','Canal','Clareamento','Implante','Ortodontia','Prótese','Raio-X','Manutenção','Harmonização','Outro'];
+  const todayAppts = getAppointments().filter(a => a.date === new Date().toISOString().slice(0, 10) && !['completed', 'cancelled'].includes(a.status));
+  const dentists = getData().settings?.dentists || [];
 
   const modal = openModal({
-    title: 'Iniciar Novo Atendimento',
+    title: 'Iniciar Atendimento',
     content: `
-      <div class="form-group" style="margin-bottom:16px;">
-        <label>Paciente *</label>
-        <div style="display:flex; gap:8px;">
-          <select id="attPatient" style="flex:1;">
-            <option value="">Selecione um paciente cadastrado...</option>
-            ${patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-          </select>
-          <button class="btn btn-secondary" id="registerNewPatientBtn" type="button">${icon('plus', 16)} Cadastrar Novo</button>
-        </div>
+      <div class="tabs" style="margin-bottom:16px;">
+        <button class="tab-btn active" id="tabAgendados">Agendados de Hoje</button>
+        <button class="tab-btn" id="tabAvulso">Novo (Avulso)</button>
       </div>
-      <div class="form-row" style="margin-bottom:16px;">
-        <div class="form-group">
-          <label>Procedimento *</label>
-          <select id="attProc">
-            <option value="">Selecione...</option>
-            ${procedures.map(p => `<option value="${p}">${p}</option>`).join('')}
-          </select>
+
+      <div id="contentAgendados">
+        ${todayAppts.length === 0 ? `<p style="color:var(--text-muted);font-size:.85rem;text-align:center;padding:20px 0;">Não há agendamentos pendentes para hoje.</p>` : `
+          <div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">
+            ${todayAppts.map(a => `
+              <div class="card" style="padding:12px;cursor:pointer;border:1px solid var(--border);" onclick="startScheduledAppt('${a.id}')">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <div>
+                    <h4 style="font-weight:600;margin-bottom:4px;">${a.time} - ${a.patientName}</h4>
+                    <div style="font-size:.8rem;color:var(--text-muted);">${a.procedure} · ${a.dentist}</div>
+                  </div>
+                  <button class="btn btn-primary btn-sm">Iniciar</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+
+      <div id="contentAvulso" style="display:none;">
+        <div class="form-group" style="margin-bottom:16px;">
+          <label>Paciente *</label>
+          <div style="display:flex; gap:8px;">
+            <select id="attPatient" style="flex:1;">
+              <option value="">Selecione um paciente cadastrado...</option>
+              ${patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+            </select>
+            <button class="btn btn-secondary" id="registerNewPatientBtn" type="button">${icon('plus', 16)} Cadastrar</button>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:16px;">
+          <div class="form-group">
+            <label>Procedimento *</label>
+            <select id="attProc">
+              <option value="">Selecione...</option>
+              ${procedures.map(p => `<option value="${p}">${p}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Dentista *</label>
+            <select id="attDentist">
+              <option value="Recepção">Nenhum (Recepção)</option>
+              ${dentists.map(d => `<option value="${d.name}">${d.name}</option>`).join('')}
+            </select>
+          </div>
         </div>
         <div class="form-group">
-          <label>Valor (R$) *</label>
+          <label>Valor Cobrado (R$) *</label>
           <input type="number" id="attValue" step="0.01" min="0" placeholder="0,00" />
         </div>
       </div>
     `,
     footer: `
       <button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
-      <button class="btn btn-primary" id="startAttBtn">Iniciar Atendimento</button>
+      <button class="btn btn-primary" id="startAttBtn" style="display:none;">Iniciar Atendimento</button>
     `
   });
+
+  const tabAgendados = modal.querySelector('#tabAgendados');
+  const tabAvulso = modal.querySelector('#tabAvulso');
+  const contentAgendados = modal.querySelector('#contentAgendados');
+  const contentAvulso = modal.querySelector('#contentAvulso');
+  const startAttBtn = modal.querySelector('#startAttBtn');
+
+  tabAgendados.onclick = () => {
+    tabAgendados.classList.add('active'); tabAvulso.classList.remove('active');
+    contentAgendados.style.display = 'block'; contentAvulso.style.display = 'none';
+    startAttBtn.style.display = 'none';
+  };
+  tabAvulso.onclick = () => {
+    tabAvulso.classList.add('active'); tabAgendados.classList.remove('active');
+    contentAvulso.style.display = 'block'; contentAgendados.style.display = 'none';
+    startAttBtn.style.display = 'block';
+  };
+
+  window.startScheduledAppt = (id) => {
+    const appt = todayAppts.find(a => a.id === id);
+    if (!appt) return;
+    
+    modal.querySelector('#attPatient').value = appt.patientId;
+    modal.querySelector('#attProc').value = appt.procedure;
+    
+    const dentistSelect = modal.querySelector('#attDentist');
+    if (dentistSelect.querySelector(`option[value="${appt.dentist}"]`)) {
+      dentistSelect.value = appt.dentist;
+    }
+    
+    modal.dataset.appointmentId = appt.id;
+    
+    tabAvulso.onclick();
+    toast.info('Preencha o valor para iniciar.');
+    modal.querySelector('#attValue').focus();
+  };
 
   modal.querySelector('#registerNewPatientBtn').addEventListener('click', () => {
     closeAllModals();
     window.location.hash = '#/pacientes';
-    // Opcional: Se quiséssemos abrir o modal de cadastro de paciente direto, teríamos que importar de patients.js
   });
 
   modal.querySelector('#startAttBtn').addEventListener('click', () => {
     const patientId = modal.querySelector('#attPatient').value;
     const procedure = modal.querySelector('#attProc').value;
     const value = modal.querySelector('#attValue').value;
+    const dentist = modal.querySelector('#attDentist').value;
 
     if (!patientId || !procedure || !value) {
-      toast.error('Preencha todos os campos (Paciente, Procedimento e Valor)');
+      toast.error('Preencha todos os campos obrigatórios (Paciente, Procedimento e Valor)');
       return;
     }
 
@@ -109,8 +180,14 @@ function openNewAttendanceModal(parentContainer) {
       patientId,
       patientName: patient.name,
       procedure,
-      value: Number(value)
+      value: Number(value),
+      dentist
     });
+    
+    if (modal.dataset.appointmentId) {
+      const appt = todayAppts.find(a => a.id === modal.dataset.appointmentId);
+      if (appt) saveAppointment({ ...appt, status: 'completed' });
+    }
 
     closeAllModals();
     toast.success('Atendimento iniciado!');
@@ -142,7 +219,7 @@ function finishAttendance(id, parentContainer) {
     patientId: attendance.patientId,
     date: new Date().toISOString(),
     procedure: attendance.procedure,
-    dentist: 'Recepção', // Default for reception/attendance flow
+    dentist: attendance.dentist || 'Recepção', // Agora puxa o dentista correto
     notes: 'Realizado e concluído no atendimento.',
     tooth: null
   });

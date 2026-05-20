@@ -1,14 +1,22 @@
 import { icon } from '../utils/icons.js';
 import { formatDate, isToday, generateId } from '../utils/helpers.js';
-import { getAppointments, saveAppointment, deleteAppointment, getPatients } from '../modules/store.js';
+import { getAppointments, saveAppointment, deleteAppointment, getPatients, getData } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
 let viewDate = new Date();
 let viewMode = 'month';
+let filterDentist = 'all';
 
 export function renderScheduling(container) {
-  const appointments = getAppointments();
+  const data = getData();
+  const dentists = data.settings?.dentists || [];
+  let appointments = getAppointments();
+  
+  if (filterDentist !== 'all') {
+    appointments = appointments.filter(a => a.dentist === filterDentist);
+  }
+
   const y = viewDate.getFullYear(), m = viewDate.getMonth();
   const monthName = viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
@@ -25,8 +33,14 @@ export function renderScheduling(container) {
           <button class="btn btn-icon btn-secondary" id="nextMonth">${icon('chevronRight',18)}</button>
           <button class="btn btn-secondary btn-sm" id="todayBtn">Hoje</button>
         </div>
-        <div style="display:flex;gap:4px">
-          ${['month','week'].map(v => `<button class="btn btn-sm ${viewMode===v?'btn-primary':'btn-secondary'}" data-view="${v}">${v==='month'?'Mês':'Semana'}</button>`).join('')}
+        <div style="display:flex;align-items:center;gap:10px">
+          <select id="dentistFilter" class="form-group" style="margin-bottom:0;padding:4px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);">
+            <option value="all" ${filterDentist === 'all' ? 'selected' : ''}>Todos os Dentistas</option>
+            ${dentists.map(d => `<option value="${d.name}" ${filterDentist === d.name ? 'selected' : ''}>${d.name}</option>`).join('')}
+          </select>
+          <div style="display:flex;gap:4px">
+            ${['month','week'].map(v => `<button class="btn btn-sm ${viewMode===v?'btn-primary':'btn-secondary'}" data-view="${v}">${v==='month'?'Mês':'Semana'}</button>`).join('')}
+          </div>
         </div>
       </div>
       <div id="calendarView"></div>
@@ -38,6 +52,14 @@ export function renderScheduling(container) {
   container.querySelector('#todayBtn').onclick = () => { viewDate = new Date(); renderScheduling(container); };
   container.querySelector('#newApptBtn').onclick = () => openApptForm(null, container);
   container.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { viewMode = b.dataset.view; renderScheduling(container); }));
+  
+  const filterEl = container.querySelector('#dentistFilter');
+  if (filterEl) {
+    filterEl.addEventListener('change', (e) => {
+      filterDentist = e.target.value;
+      renderScheduling(container);
+    });
+  }
 
   const calView = document.getElementById('calendarView');
 
@@ -63,6 +85,8 @@ function renderMonthView(calView, appointments, y, m, parentContainer) {
     html += `<div class="calendar-cell other-month"><span class="day-num">${daysInPrev - i}</span></div>`;
   }
 
+  const dentistsData = getData().settings?.dentists || [];
+
   // Current month days
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -71,8 +95,16 @@ function renderMonthView(calView, appointments, y, m, parentContainer) {
 
     html += `<div class="calendar-cell${isTodayClass}" data-date="${dateStr}">
       <span class="day-num">${d}</span>
-      ${dayAppts.slice(0, 3).map(a => `<div class="cal-event ${a.status}" data-id="${a.id}" title="${a.time} - ${a.patientName}: ${a.procedure}">${a.time} ${a.patientName.split(' ')[0]}</div>`).join('')}
-      ${dayAppts.length > 3 ? `<div style="font-size:.65rem;color:var(--text-muted);padding:2px 6px">+${dayAppts.length - 3} mais</div>` : ''}
+      ${dayAppts.slice(0, 3).map(a => {
+        const dentistObj = dentistsData.find(dt => dt.name === a.dentist);
+        const photoHtml = (dentistObj && dentistObj.photo) 
+          ? `<img src="${dentistObj.photo}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;">` 
+          : '';
+        return `<div class="cal-event ${a.status}" data-id="${a.id}" title="${a.time} - ${a.patientName}: ${a.procedure}">
+          <div style="display:flex;align-items:center;">${photoHtml}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.time} ${a.patientName.split(' ')[0]}</span></div>
+        </div>`;
+      }).join('')}
+      ${dayAppts.length > 3 ? `<div class="cal-more-btn" data-date="${dateStr}" style="font-size:.65rem;color:var(--text-muted);padding:2px 6px;margin-top:2px;cursor:pointer;background:var(--bg-lighter);border-radius:var(--radius-sm);text-align:center;" title="Ver todos os agendamentos deste dia">+${dayAppts.length - 3} mais</div>` : ''}
     </div>`;
   }
 
@@ -94,6 +126,15 @@ function renderMonthView(calView, appointments, y, m, parentContainer) {
     });
   });
 
+  calView.querySelectorAll('.cal-more-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dateStr = btn.dataset.date;
+      const dayAppts = appointments.filter(a => a.date === dateStr).sort((a, b) => a.time.localeCompare(b.time));
+      openDayAppointmentsModal(dateStr, dayAppts, parentContainer);
+    });
+  });
+
   calView.querySelectorAll('.calendar-cell:not(.other-month)').forEach(cell => {
     cell.addEventListener('dblclick', () => {
       openApptForm({ date: cell.dataset.date }, parentContainer);
@@ -112,6 +153,8 @@ function renderWeekView(calView, appointments, parentContainer) {
     days.push(d);
   }
 
+  const dentistsData = getData().settings?.dentists || [];
+
   calView.innerHTML = `
     <div style="overflow-x:auto">
       <table class="data-table" style="min-width:800px">
@@ -127,7 +170,15 @@ function renderWeekView(calView, appointments, parentContainer) {
               const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
               const hourAppts = appointments.filter(a => a.date === dateStr && parseInt(a.time) === h);
               return `<td style="position:relative;min-height:50px;padding:4px">
-                ${hourAppts.map(a => `<div class="cal-event ${a.status}" data-id="${a.id}" style="margin-bottom:2px">${a.time} ${a.patientName.split(' ')[0]}</div>`).join('')}
+                ${hourAppts.map(a => {
+                  const dentistObj = dentistsData.find(dt => dt.name === a.dentist);
+                  const photoHtml = (dentistObj && dentistObj.photo) 
+                    ? `<img src="${dentistObj.photo}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;">` 
+                    : '';
+                  return `<div class="cal-event ${a.status}" data-id="${a.id}" style="margin-bottom:2px;display:flex;align-items:center;">
+                    ${photoHtml}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.time} ${a.patientName.split(' ')[0]}</span>
+                  </div>`;
+                }).join('')}
               </td>`;
             }).join('')}
           </tr>`).join('')}
@@ -184,6 +235,7 @@ function openApptForm(defaults = {}, parentContainer) {
   const patients = getPatients().filter(p => p.status === 'active');
   const procedures = ['Avaliação','Limpeza','Restauração','Extração','Canal','Clareamento','Implante','Ortodontia','Prótese','Raio-X','Manutenção','Harmonização','Outro'];
   const today = new Date().toISOString().slice(0, 10);
+  const dentists = getData().settings?.dentists || [];
 
   const modal = openModal({
     title: 'Nova Consulta', size: 'lg',
@@ -206,7 +258,10 @@ function openApptForm(defaults = {}, parentContainer) {
         <div class="form-group"><label>Duração (min)</label>
           <select id="apptDur"><option>30</option><option>45</option><option selected>60</option><option>90</option><option>120</option></select></div>
         <div class="form-group"><label>Dentista *</label>
-          <select id="apptDentist"><option>Dra. Helena Souza</option><option>Dr. Ricardo Mendes</option></select></div>
+          <select id="apptDentist">
+            ${dentists.length === 0 ? '<option value="">Sem dentistas cadastrados</option>' : ''}
+            ${dentists.map(d => `<option value="${d.name}">${d.name}</option>`).join('')}
+          </select></div>
       </div>
       <div class="form-group"><label>Observações</label><textarea id="apptNotes" rows="2"></textarea></div>
     `,
@@ -229,4 +284,60 @@ function openApptForm(defaults = {}, parentContainer) {
     closeAllModals(); toast.success('Consulta agendada com sucesso!');
     renderScheduling(parentContainer);
   };
+}
+
+function openDayAppointmentsModal(dateStr, dayAppts, parentContainer) {
+  const formattedDate = formatDate(dateStr);
+  const dentistsData = getData().settings?.dentists || [];
+  
+  const modal = openModal({
+    title: `Agendamentos - ${formattedDate}`,
+    size: 'lg',
+    content: `
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:450px;overflow-y:auto;padding-right:8px;">
+        ${dayAppts.length === 0 ? '<p style="color:var(--text-muted);text-align:center;padding:20px 0;">Nenhum agendamento neste dia.</p>' : ''}
+        ${dayAppts.map(a => {
+          const dentistObj = dentistsData.find(dt => dt.name === a.dentist);
+          const photoHtml = (dentistObj && dentistObj.photo) 
+            ? `<img src="${dentistObj.photo}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;">` 
+            : `<div style="width:24px;height:24px;border-radius:50%;background:var(--border);color:var(--text-muted);display:flex;align-items:center;justify-content:center;margin-right:8px;font-size:10px;font-weight:bold;flex-shrink:0;">${a.dentist ? a.dentist.charAt(0) : '?'}</div>`;
+          return `
+            <div class="card day-appt-card" data-id="${a.id}" style="padding:12px;cursor:pointer;border:1px solid var(--border);border-left:4px solid ${a.status === 'confirmed' ? 'var(--accent)' : a.status === 'completed' ? 'var(--accent-success)' : a.status === 'cancelled' ? 'var(--accent-danger)' : 'var(--accent-warn)'};transition:background 0.2s;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <h4 style="font-weight:600;margin-bottom:6px;font-size:1.05rem;">${a.time} - ${a.patientName}</h4>
+                  <div style="display:flex;align-items:center;font-size:.85rem;color:var(--text-muted);">
+                    ${photoHtml} ${a.procedure} · <span style="margin-left:4px;font-weight:500;">${a.dentist}</span>
+                  </div>
+                </div>
+                <span class="status-badge status-${a.status}">${a.status === 'confirmed' ? 'Confirmado' : a.status === 'completed' ? 'Concluído' : a.status === 'cancelled' ? 'Cancelado' : 'Pendente'}</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Fechar</button>
+      <button class="btn btn-primary" id="addApptFromDayBtn">${icon('plus',14)} Novo neste dia</button>
+    `
+  });
+
+  modal.querySelectorAll('.day-appt-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const appt = dayAppts.find(a => a.id === card.dataset.id);
+      if (appt) {
+        document.querySelector('.modal-backdrop')?.remove(); // Fecha o modal atual
+        openApptDetail(appt, parentContainer);
+      }
+    });
+    // Efeito visual no hover
+    card.addEventListener('mouseenter', () => card.style.background = 'var(--bg-lighter)');
+    card.addEventListener('mouseleave', () => card.style.background = '');
+  });
+
+  modal.querySelector('#addApptFromDayBtn').addEventListener('click', () => {
+    document.querySelector('.modal-backdrop')?.remove();
+    openApptForm({ date: dateStr }, parentContainer);
+  });
 }
