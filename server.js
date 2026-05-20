@@ -3,11 +3,29 @@ import cors from 'cors';
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import fs from 'fs';
+
+// Resolver __dirname em ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ─── Servir Frontend Estático (produção) ────────────────────────────
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  console.log('📂 Servindo frontend estático de ./dist');
+} else {
+  console.log('⚠️  Pasta dist/ não encontrada. Rode "npm run build" primeiro ou use "npm run start".');
+}
+
+// ─── WhatsApp Client ────────────────────────────────────────────────
 let qrDataURL = null;
 let isConnected = false;
 let isReady = false;
@@ -41,7 +59,11 @@ client.on('disconnected', (reason) => {
     isConnected = false;
     isReady = false;
     // Tenta reinicializar se a sessão foi desconectada
-    client.initialize();
+    setTimeout(() => {
+        client.initialize().catch(err => {
+            console.error('❌ Erro ao reconectar WhatsApp:', err.message);
+        });
+    }, 5000);
 });
 
 // Tratamento de erros
@@ -51,7 +73,32 @@ client.on('auth_failure', msg => {
     isReady = false;
 });
 
-client.initialize();
+// Captura erros não tratados para que o servidor não crash
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️  Erro não tratado (ignorado para manter o servidor rodando):', reason?.message || reason);
+});
+
+process.on('uncaughtException', (err) => {
+    // Não deixa o servidor morrer por erros do Puppeteer/WhatsApp
+    console.error('⚠️  Exceção não capturada (ignorado):', err?.message || err);
+});
+
+// Inicialização com tratamento de erro
+async function initWhatsApp() {
+    try {
+        await client.initialize();
+    } catch (err) {
+        console.error('');
+        console.error('❌ Erro ao inicializar o WhatsApp:', err.message);
+        console.error('   Tente apagar a pasta .wwebjs_auth e reiniciar o sistema.');
+        console.error('   O servidor continua rodando — recarregue a página para tentar novamente.');
+        console.error('');
+    }
+}
+
+initWhatsApp();
+
+// ─── Rotas API WhatsApp ─────────────────────────────────────────────
 
 // Rota para status e QRCode
 app.get('/api/whatsapp/status', (req, res) => {
@@ -60,6 +107,28 @@ app.get('/api/whatsapp/status', (req, res) => {
         connected: isConnected,
         qr: qrDataURL
     });
+});
+
+// Rota para reinicializar o WhatsApp
+app.post('/api/whatsapp/restart', async (req, res) => {
+    try {
+        console.log('🔄 Reinicializando cliente WhatsApp...');
+        isReady = false;
+        isConnected = false;
+        qrDataURL = null;
+        
+        try { await client.destroy(); } catch (e) { /* ignora */ }
+        
+        setTimeout(() => {
+            client.initialize().catch(err => {
+                console.error('❌ Erro ao reinicializar WhatsApp:', err.message);
+            });
+        }, 2000);
+
+        res.json({ success: true, message: 'Reinicializando WhatsApp...' });
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao reinicializar: ' + err.message });
+    }
 });
 
 // Rota para disparar mensagens
@@ -103,7 +172,33 @@ app.post('/api/whatsapp/send', async (req, res) => {
     console.log('Disparo concluído!');
 });
 
+// ─── SPA Fallback (deve vir DEPOIS das rotas /api) ──────────────────
+if (fs.existsSync(distPath)) {
+  app.get('{*path}', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
+// ─── Iniciar Servidor ───────────────────────────────────────────────
 const PORT = 3001;
 app.listen(PORT, () => {
-    console.log(`Servidor WhatsApp rodando na porta ${PORT}`);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════');
+    console.log('  🦷 HS Corp — Gestão Odontológica');
+    console.log(`  🌐 Acesse: http://localhost:${PORT}`);
+    console.log('  📱 WhatsApp API ativa');
+    console.log('═══════════════════════════════════════════════════');
+    console.log('');
+    console.log('  ⚠️  Não feche esta janela enquanto estiver usando o sistema.');
+    console.log('');
+
+    // Abrir navegador automaticamente no Windows
+    const url = `http://localhost:${PORT}`;
+    const command = process.platform === 'win32' ? `start ${url}`
+                  : process.platform === 'darwin' ? `open ${url}`
+                  : `xdg-open ${url}`;
+    
+    exec(command, (err) => {
+      if (err) console.log('Não foi possível abrir o navegador automaticamente. Acesse manualmente:', url);
+    });
 });

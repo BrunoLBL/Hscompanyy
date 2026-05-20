@@ -24,7 +24,10 @@ export function renderWhatsapp() {
       <h3 style="margin-bottom: 8px;">Status do WhatsApp</h3>
       <div id="wa-status-text">Verificando conexão...</div>
       <img id="wa-qr-image" src="" alt="QR Code" style="display: none; margin: 16px auto; max-width: 200px;" />
-      <button id="wa-refresh-btn" class="btn btn-secondary" style="margin-top: 12px; display: none;">Atualizar Status</button>
+      <div style="margin-top: 12px; display: flex; gap: 8px; justify-content: center;">
+        <button id="wa-refresh-btn" class="btn btn-secondary" style="display: none;">Atualizar Status</button>
+        <button id="wa-restart-btn" class="btn btn-primary" style="display: none;">🔄 Reconectar WhatsApp</button>
+      </div>
     </div>
 
     <div class="charts-grid" style="grid-template-columns: 1fr 350px;">
@@ -121,6 +124,7 @@ export function renderWhatsapp() {
   const statusText = document.getElementById('wa-status-text');
   const qrImage = document.getElementById('wa-qr-image');
   const refreshBtn = document.getElementById('wa-refresh-btn');
+  const restartBtn = document.getElementById('wa-restart-btn');
   
   let filteredPatients = [];
   let selectedIds = new Set();
@@ -131,43 +135,67 @@ export function renderWhatsapp() {
     }
     
     try {
-      const res = await fetch('http://localhost:3001/api/whatsapp/status');
+      const res = await fetch('/api/whatsapp/status');
       const data = await res.json();
       
       const statusText = document.getElementById('wa-status-text');
       const qrImage = document.getElementById('wa-qr-image');
       
+      const restartBtnEl = document.getElementById('wa-restart-btn');
+
       if (data.ready) {
         statusText.innerHTML = '<span style="color: var(--accent-success); font-weight: bold;">✅ Conectado e Pronto!</span>';
         qrImage.style.display = 'none';
         btnSend.disabled = false;
         btnSend.style.opacity = '1';
+        if (restartBtnEl) restartBtnEl.style.display = 'none';
       } else if (data.qr) {
         statusText.innerHTML = '<span style="color: var(--accent-warn); font-weight: bold;">Aguardando leitura do QR Code</span>';
         qrImage.src = data.qr;
         qrImage.style.display = 'block';
         btnSend.disabled = true;
         btnSend.style.opacity = '0.5';
+        if (restartBtnEl) restartBtnEl.style.display = 'inline-flex';
       } else {
         statusText.innerHTML = '<span>Inicializando sessão do WhatsApp, aguarde...</span>';
         qrImage.style.display = 'none';
         btnSend.disabled = true;
         btnSend.style.opacity = '0.5';
+        if (restartBtnEl) restartBtnEl.style.display = 'inline-flex';
       }
     } catch (err) {
       const statusText = document.getElementById('wa-status-text');
       const qrImage = document.getElementById('wa-qr-image');
+      const restartBtnEl = document.getElementById('wa-restart-btn');
       if (statusText) {
-        statusText.innerHTML = '<span style="color: var(--accent-danger); font-weight: bold;">❌ Erro ao conectar. O servidor (npm run server) está rodando?</span>';
+        statusText.innerHTML = '<span style="color: var(--accent-danger); font-weight: bold;">❌ Servidor não encontrado. Verifique se o sistema foi iniciado corretamente.</span>';
         qrImage.style.display = 'none';
         btnSend.disabled = true;
         btnSend.style.opacity = '0.5';
+        if (restartBtnEl) restartBtnEl.style.display = 'inline-flex';
       }
     }
   }
 
   // Atualizar manualmente e tbm por polling
   refreshBtn.addEventListener('click', checkServerStatus);
+  
+  // Botão reconectar WhatsApp
+  restartBtn.addEventListener('click', async () => {
+    restartBtn.disabled = true;
+    restartBtn.textContent = '⏳ Reconectando...';
+    try {
+      await fetch('/api/whatsapp/restart', { method: 'POST' });
+      showToast('Reinicializando WhatsApp... Aguarde o QR Code.', 'success');
+    } catch (err) {
+      showToast('Erro ao reconectar. Verifique se o servidor está rodando.', 'error');
+    }
+    setTimeout(() => {
+      restartBtn.disabled = false;
+      restartBtn.textContent = '🔄 Reconectar WhatsApp';
+    }, 5000);
+  });
+  
   let pollInterval = setInterval(checkServerStatus, 3000);
   checkServerStatus();
 
@@ -294,7 +322,7 @@ export function renderWhatsapp() {
     });
 
     try {
-      const response = await fetch('http://localhost:3001/api/whatsapp/send', {
+      const response = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages })
