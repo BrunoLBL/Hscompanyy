@@ -32,3 +32,6 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Dados da clínica (salvos localmente)
+data/

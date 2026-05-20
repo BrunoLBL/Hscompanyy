@@ -16,33 +16,35 @@ import { renderReports } from './modules/reports.js';
 import { renderSettings } from './modules/settings.js';
 import { renderWhatsapp } from './modules/whatsapp.js';
 
-// Initialize
-initStore();
-initToast();
-initModal();
+// Initialize (async porque initStore pode restaurar dados do servidor)
+async function bootstrap() {
+  await initStore();
+  initToast();
+  initModal();
 
-// Render layout
-renderSidebar();
-renderHeader();
+  // Render layout
+  renderSidebar();
+  renderHeader();
 
-// Register routes
-registerRoute('/', renderDashboard);
-registerRoute('/atendimentos', renderAttendances);
-registerRoute('/pacientes', renderPatients);
-registerRoute('/prontuario', (container, id) => renderPatientRecord(container, id));
-registerRoute('/agenda', renderScheduling);
-registerRoute('/financeiro', renderFinancial);
-registerRoute('/estoque', renderInventory);
-registerRoute('/relatorios', renderReports);
-registerRoute('/configuracoes', renderSettings);
-registerRoute('/whatsapp', renderWhatsapp);
+  // Register routes
+  registerRoute('/', renderDashboard);
+  registerRoute('/atendimentos', renderAttendances);
+  registerRoute('/pacientes', renderPatients);
+  registerRoute('/prontuario', (container, id) => renderPatientRecord(container, id));
+  registerRoute('/agenda', renderScheduling);
+  registerRoute('/financeiro', renderFinancial);
+  registerRoute('/estoque', renderInventory);
+  registerRoute('/relatorios', renderReports);
+  registerRoute('/configuracoes', renderSettings);
+  registerRoute('/whatsapp', renderWhatsapp);
 
-// Start router
-initRouter();
+  // Start router
+  initRouter();
 
-// Notification check for upcoming appointments
-function checkNotifications() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') Notification.requestPermission();
+  // Notification check for upcoming appointments
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 }
-checkNotifications();
+
+bootstrap();

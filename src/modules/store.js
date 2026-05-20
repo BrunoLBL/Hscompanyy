@@ -5,13 +5,100 @@ const STORE_KEY = 'hscorp_data';
 function getAll() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || null; } catch { return null; }
 }
-function saveAll(data) { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+
+// ─── Sincronização com servidor (arquivo no disco) ──────────────────
+let _syncTimeout = null;
+export let lastSyncTime = null;
+export let syncStatus = 'idle'; // 'idle' | 'syncing' | 'success' | 'error'
+
+function syncToServer(data) {
+  // Debounce: espera 2s sem novas alterações antes de sincronizar
+  if (_syncTimeout) clearTimeout(_syncTimeout);
+  _syncTimeout = setTimeout(async () => {
+    try {
+      syncStatus = 'syncing';
+      const res = await fetch('/api/data/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        const result = await res.json();
+        lastSyncTime = result.timestamp;
+        syncStatus = 'success';
+        console.log(`💾 Dados sincronizados com o servidor (${result.size})`);
+      } else {
+        syncStatus = 'error';
+        console.warn('⚠️ Falha ao sincronizar com servidor');
+      }
+    } catch (err) {
+      syncStatus = 'error';
+      // Servidor pode não estar rodando (modo dev sem server)
+      console.warn('⚠️ Servidor indisponível para sincronização');
+    }
+  }, 2000);
+}
+
+export async function forceSync() {
+  const data = getAll();
+  if (!data) return { success: false, error: 'Sem dados para sincronizar' };
+  try {
+    syncStatus = 'syncing';
+    const res = await fetch('/api/data/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (res.ok) {
+      const result = await res.json();
+      lastSyncTime = result.timestamp;
+      syncStatus = 'success';
+      return { success: true, timestamp: result.timestamp, size: result.size };
+    }
+    syncStatus = 'error';
+    return { success: false, error: 'Falha no servidor' };
+  } catch (err) {
+    syncStatus = 'error';
+    return { success: false, error: err.message };
+  }
+}
+
+function saveAll(data) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(data));
+  syncToServer(data); // Sincroniza com servidor em background
+}
 
 let _data = null;
 
-export function initStore() {
+export async function initStore() {
   _data = getAll();
-  if (!_data) { _data = seedDemoData(); saveAll(_data); }
+  
+  if (!_data) {
+    // localStorage vazio — tentar restaurar do servidor
+    try {
+      const res = await fetch('/api/data/load');
+      if (res.ok) {
+        const result = await res.json();
+        if (result.exists && result.data) {
+          _data = result.data;
+          localStorage.setItem(STORE_KEY, JSON.stringify(_data));
+          console.log('✅ Dados restaurados do servidor!');
+          return _data;
+        }
+      }
+    } catch (err) {
+      // Servidor indisponível — continua normalmente
+      console.warn('⚠️ Não foi possível restaurar dados do servidor');
+    }
+    
+    // Nenhum dado encontrado — criar dados demo
+    _data = seedDemoData();
+    saveAll(_data);
+  } else {
+    // localStorage tem dados — fazer sync inicial em background
+    syncToServer(_data);
+  }
+  
   return _data;
 }
 

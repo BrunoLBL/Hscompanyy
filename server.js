@@ -14,7 +14,135 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+
+// ─── Persistência de Dados em Arquivo ───────────────────────────────
+const dataDir = path.join(__dirname, 'data');
+const backupsDir = path.join(dataDir, 'backups');
+const dataFile = path.join(dataDir, 'clinic-data.json');
+
+// Criar pastas se não existirem
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+if (!fs.existsSync(backupsDir)) fs.mkdirSync(backupsDir, { recursive: true });
+
+let lastBackupDate = null;
+
+function createDailyBackup() {
+    const today = new Date().toISOString().slice(0, 10);
+    if (lastBackupDate === today) return; // Já fez backup hoje
+    
+    if (fs.existsSync(dataFile)) {
+        const backupFile = path.join(backupsDir, `backup_${today}.json`);
+        if (!fs.existsSync(backupFile)) {
+            fs.copyFileSync(dataFile, backupFile);
+            console.log(`📋 Backup diário criado: backup_${today}.json`);
+        }
+        lastBackupDate = today;
+        
+        // Limpar backups com mais de 30 dias
+        try {
+            const files = fs.readdirSync(backupsDir);
+            const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+            files.forEach(file => {
+                const match = file.match(/backup_(\d{4}-\d{2}-\d{2})\.json/);
+                if (match) {
+                    const fileDate = new Date(match[1]).getTime();
+                    if (fileDate < cutoff) {
+                        fs.unlinkSync(path.join(backupsDir, file));
+                        console.log(`🗑️  Backup antigo removido: ${file}`);
+                    }
+                }
+            });
+        } catch (e) { /* ignora erros de limpeza */ }
+    }
+}
+
+// Rota: Sincronizar dados (frontend → arquivo)
+app.post('/api/data/sync', (req, res) => {
+    try {
+        const data = req.body;
+        if (!data || typeof data !== 'object') {
+            return res.status(400).json({ error: 'Dados inválidos' });
+        }
+        
+        createDailyBackup();
+        fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
+        
+        res.json({ 
+            success: true, 
+            timestamp: new Date().toISOString(),
+            size: (JSON.stringify(data).length / 1024).toFixed(1) + ' KB'
+        });
+    } catch (err) {
+        console.error('❌ Erro ao salvar dados:', err.message);
+        res.status(500).json({ error: 'Erro ao salvar: ' + err.message });
+    }
+});
+
+// Rota: Carregar dados (arquivo → frontend)
+app.get('/api/data/load', (req, res) => {
+    try {
+        if (!fs.existsSync(dataFile)) {
+            return res.json({ exists: false, data: null });
+        }
+        const raw = fs.readFileSync(dataFile, 'utf-8');
+        const data = JSON.parse(raw);
+        res.json({ exists: true, data });
+    } catch (err) {
+        console.error('❌ Erro ao carregar dados:', err.message);
+        res.status(500).json({ error: 'Erro ao carregar: ' + err.message });
+    }
+});
+
+// Rota: Listar backups disponíveis
+app.get('/api/data/backups', (req, res) => {
+    try {
+        if (!fs.existsSync(backupsDir)) {
+            return res.json({ backups: [] });
+        }
+        const files = fs.readdirSync(backupsDir)
+            .filter(f => f.endsWith('.json'))
+            .sort()
+            .reverse()
+            .map(f => {
+                const stats = fs.statSync(path.join(backupsDir, f));
+                return {
+                    name: f,
+                    date: f.match(/backup_(.+)\.json/)?.[1] || f,
+                    size: (stats.size / 1024).toFixed(1) + ' KB'
+                };
+            });
+        res.json({ backups: files });
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao listar backups: ' + err.message });
+    }
+});
+
+// Rota: Restaurar backup específico
+app.post('/api/data/restore', (req, res) => {
+    try {
+        const { filename } = req.body;
+        if (!filename) return res.status(400).json({ error: 'Nome do arquivo não informado' });
+        
+        const backupPath = path.join(backupsDir, filename);
+        if (!fs.existsSync(backupPath)) {
+            return res.status(404).json({ error: 'Backup não encontrado' });
+        }
+        
+        // Criar backup do estado atual antes de restaurar
+        createDailyBackup();
+        
+        const raw = fs.readFileSync(backupPath, 'utf-8');
+        const data = JSON.parse(raw);
+        
+        // Sobrescrever dados atuais com o backup
+        fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
+        
+        res.json({ success: true, data });
+    } catch (err) {
+        res.status(500).json({ error: 'Erro ao restaurar: ' + err.message });
+    }
+});
 
 // ─── Servir Frontend Estático (produção) ────────────────────────────
 const distPath = path.join(__dirname, 'dist');
