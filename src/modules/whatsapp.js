@@ -54,7 +54,7 @@ export function renderWhatsapp() {
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = \`hscorp_pacientes_\${new Date().toISOString().slice(0, 10)}.json\`;
+      a.download = `hscorp_pacientes_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(a.href);
       
