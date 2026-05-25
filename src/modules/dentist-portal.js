@@ -5,22 +5,32 @@ import { toast } from '../components/toast.js';
 let timerInterval = null;
 let lastAttendanceIds = [];
 
-// Som de notificação simples e leve
+// Som de notificação (Sino/Chime agradável)
 function playNotification() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    // Som duplo (ding-dong)
-    osc.frequency.setValueAtTime(660, ctx.currentTime);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.5);
+    const t = ctx.currentTime;
+    
+    // Acorde agradável (Ding!)
+    const freqs = [523.25, 659.25, 1046.50]; 
+    
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.3 / freqs.length, t + 0.02); // Attack rápido
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5 + (i * 0.2)); // Decay suave
+      
+      osc.start(t);
+      osc.stop(t + 2);
+    });
   } catch(e) { console.warn('Áudio não suportado', e); }
 }
 
@@ -96,11 +106,12 @@ function renderPanel(container, dentistName) {
 
   const attendances = getAttendances().filter(a => a.dentist === dentistName);
 
-  // Verifica se há novos atendimentos para tocar o som
+  // Verifica se há novos atendimentos para tocar o som e notificar
   const currentIds = attendances.map(a => a.id);
   const hasNew = currentIds.some(id => !lastAttendanceIds.includes(id));
   if (hasNew && lastAttendanceIds.length > 0) {
     playNotification();
+    toast.info('Novo atendimento recebido!');
   }
   lastAttendanceIds = currentIds;
 

@@ -36,18 +36,10 @@ export function initRouter() {
     const isPortal = path === '/portal';
     const sidebar = document.getElementById('sidebar');
     const header = document.getElementById('top-header');
-    const mainContent = document.getElementById('main-wrapper');
     const pageContent = document.getElementById('page-content');
     
     if (sidebar) sidebar.style.display = isPortal ? 'none' : 'flex';
     if (header) header.style.display = isPortal ? 'none' : 'flex';
-    if (mainContent) {
-      // Quando no celular, a sidebar já é position fixed, então não há margin-left por padrão na mídia
-      // Mas para garantir que na web/desktop ocupe tudo:
-      if (window.innerWidth > 1024) {
-        mainContent.style.marginLeft = isPortal ? '0' : 'var(--sidebar-w)'; 
-      }
-    }
     if (pageContent) {
       pageContent.style.padding = isPortal ? '0' : '28px';
     }
