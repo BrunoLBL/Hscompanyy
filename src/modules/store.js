@@ -362,13 +362,14 @@ export async function initStore() {
   return _data;
 }
 
-// Garante que o array de dentistas esteja no novo formato de objeto {id, name, photo}
+// Garante que o array de dentistas esteja no novo formato de objeto {id, name, photo, type}
 function normalizeDentists(data) {
   if (data && data.settings && Array.isArray(data.settings.dentists)) {
     data.settings.dentists = data.settings.dentists.map(d => {
       if (typeof d === 'string') {
-        return { id: generateId(), name: d, photo: null };
+        return { id: generateId(), name: d, photo: null, type: 'fixo' };
       }
+      if (!d.type) d.type = 'fixo'; // Fallback para dentistas antigos
       return d;
     });
   }
@@ -542,8 +543,8 @@ function seedDemoData() {
 
   const procedures = ['Limpeza','Restauração','Extração','Canal','Clareamento','Implante','Ortodontia','Prótese','Avaliação','Raio-X'];
   const dentists = [
-    { id: generateId(), name: 'Dra. Helena Souza', photo: null },
-    { id: generateId(), name: 'Dr. Ricardo Mendes', photo: null }
+    { id: generateId(), name: 'Dra. Helena Souza', photo: null, type: 'fixo' },
+    { id: generateId(), name: 'Dr. Ricardo Mendes', photo: null, type: 'freelancer' }
   ];
   const statuses = ['confirmed','pending','completed','cancelled'];
 

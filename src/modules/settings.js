@@ -34,6 +34,10 @@ export function renderSettings(container) {
           <div id="dentistsList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
           <div style="display:flex;gap:8px;">
             <input type="text" id="newDentistName" placeholder="Nome do dentista..." style="flex:1;">
+            <select id="newDentistType" class="input" style="width:130px;">
+              <option value="fixo">Fixo</option>
+              <option value="freelancer">Freelancer</option>
+            </select>
             <button class="btn btn-secondary btn-sm" id="addDentistBtn">${icon('plus', 14)} Adicionar</button>
           </div>
         </div>
@@ -128,7 +132,10 @@ export function renderSettings(container) {
   function renderDentistsList() {
     const listEl = document.getElementById('dentistsList');
     if (!listEl) return;
-    listEl.innerHTML = currentDentists.map(d => `
+    listEl.innerHTML = currentDentists.map(d => {
+      const typeLabel = d.type === 'freelancer' ? 'Freelancer' : 'Fixo';
+      const typeColor = d.type === 'freelancer' ? 'var(--accent-warn)' : 'var(--accent-info)';
+      return `
       <div class="dentist-item" data-id="${d.id}" style="display:flex;align-items:center;gap:12px;padding:8px;background:var(--bg-lighter);border:1px solid var(--border);border-radius:var(--radius-sm);">
         <div style="position:relative;width:40px;height:40px;border-radius:50%;background:var(--border);overflow:hidden;flex-shrink:0;">
           ${d.photo ? `<img src="${d.photo}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--text-muted);font-weight:bold;">${d.name.charAt(0)}</div>`}
@@ -137,10 +144,16 @@ export function renderSettings(container) {
             <input type="file" class="dentist-photo-input" data-id="${d.id}" accept="image/*" style="display:none;">
           </label>
         </div>
-        <div style="flex:1;font-weight:600;">${d.name}</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;display:flex;align-items:center;gap:8px;">
+            ${d.name}
+            <span style="font-size:0.7rem;padding:2px 6px;border-radius:10px;background:${typeColor};color:#fff;">${typeLabel}</span>
+          </div>
+        </div>
         <button class="btn btn-icon btn-danger btn-sm remove-dentist-btn" data-id="${d.id}" title="Remover dentista">${icon('trash', 14)}</button>
       </div>
-    `).join('');
+      `;
+    }).join('');
 
     listEl.querySelectorAll('.remove-dentist-btn').forEach(btn => {
       btn.onclick = (e) => {
@@ -171,9 +184,10 @@ export function renderSettings(container) {
   if (addBtn) {
     addBtn.onclick = () => {
       const input = container.querySelector('#newDentistName');
+      const typeInput = container.querySelector('#newDentistType');
       const name = input.value.trim();
       if (!name) return;
-      currentDentists.push({ id: generateId(), name, photo: null });
+      currentDentists.push({ id: generateId(), name, photo: null, type: typeInput.value });
       input.value = '';
       renderDentistsList();
     };

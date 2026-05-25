@@ -28,6 +28,7 @@ export function renderSidebar() {
         <a class="nav-item" data-route="/atendimentos" href="#/atendimentos">${icon('clock')}<span>Atendimentos</span></a>
         <a class="nav-item" data-route="/pacientes" href="#/pacientes">${icon('users')}<span>Pacientes</span></a>
         <a class="nav-item" data-route="/agenda" href="#/agenda">${icon('calendar')}<span>Agendamento</span>${todayAppts?`<span class="badge">${todayAppts}</span>`:''}</a>
+        <a class="nav-item" data-route="/dentistas" href="#/dentistas">${icon('user')}<span>Dentistas</span></a>
       </div>
       <div class="nav-section">
         <div class="nav-section-title">Gestão</div>
