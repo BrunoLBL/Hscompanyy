@@ -288,58 +288,77 @@ function subscribeRealtime() {
 export async function initStore() {
   const localData = getAll();
 
-  // Fast-path para troca de perfil (dados já estão sincronizados)
-  const justSynced = sessionStorage.getItem('hscorp_just_synced');
-  if (justSynced) {
-    sessionStorage.removeItem('hscorp_just_synced');
-    if (localData) {
-      _data = localData;
-      normalizeDentists(_data);
-      subscribeRealtime();
-      console.log('⚡ initStore rápido (pós-flushSync)');
-      return _data;
+  // 1. OFFLINE-FIRST: Se já temos dados no localStorage, usamos eles imediatamente
+  // Isso elimina a espera de 8-10 segundos na tela branca.
+  if (localData) {
+    _data = localData;
+    normalizeDentists(_data);
+    console.log('⚡ initStore ultra-rápido: renderizando UI imediatamente com dados locais');
+
+    // Se houver Supabase, busca atualizações em background sem bloquear a UI
+    if (supabase) {
+      setTimeout(async () => {
+        try {
+          // Só baixa do Supabase se não acabou de sincronizar na troca de perfil
+          const justSynced = sessionStorage.getItem('hscorp_just_synced');
+          if (justSynced) {
+            sessionStorage.removeItem('hscorp_just_synced');
+            subscribeRealtime();
+            return;
+          }
+
+          console.log('🔄 Buscando atualizações do Supabase em background...');
+          const remoteData = await loadFromSupabase();
+          
+          if (remoteData) {
+            // Ignora se vieram da nossa própria instância
+            if (remoteData._instanceId === _instanceId) {
+               subscribeRealtime();
+               return; 
+            }
+            
+            const merged = deepMergeData(localData, remoteData);
+            _data = merged;
+            localStorage.setItem(STORE_KEY, JSON.stringify(merged));
+            console.log('✅ Merge em background concluído (local + Supabase)');
+            
+            // Dispara evento para a UI se atualizar (usando o mesmo listener do Realtime)
+            window.dispatchEvent(new CustomEvent('hscorp:data-updated'));
+          } else {
+             // Se local tem dados mas remoto está vazio (primeiro acesso ou base limpa)
+             syncToServer(_data);
+          }
+          subscribeRealtime();
+        } catch (err) {
+          console.error('Erro no fetch em background:', err);
+          subscribeRealtime();
+        }
+      }, 0);
     }
+    
+    return _data;
   }
 
-  // Carrega e faz merge entre local e remoto
+  // 2. FALLBACK: Se NÃO HÁ dados locais (primeiro acesso em um PC novo), temos que esperar a rede
+  console.log('⏳ Nenhum dado local encontrado. Aguardando download do Supabase...');
   if (supabase) {
     const remoteData = await loadFromSupabase();
-
-    if (remoteData && localData) {
-      _data = deepMergeData(localData, remoteData);
-      normalizeDentists(_data);
-      localStorage.setItem(STORE_KEY, JSON.stringify(_data));
-      console.log('✅ Dados carregados com merge (local + Supabase)');
-    } else if (remoteData) {
+    if (remoteData) {
       _data = remoteData;
       normalizeDentists(_data);
       localStorage.setItem(STORE_KEY, JSON.stringify(_data));
-      console.log('✅ Dados carregados do Supabase');
-    } else if (localData) {
-      _data = localData;
-      normalizeDentists(_data);
-      syncToServer(_data);
-      console.log('✅ Dados locais enviados ao Supabase');
-    }
-
-    if (_data) {
+      console.log('✅ Dados iniciais carregados do Supabase');
       subscribeRealtime();
       return _data;
     }
   }
 
-  // Fallback para localStorage (sem Supabase)
-  _data = localData;
-
-  if (!_data) {
-    _data = seedDemoData();
-    saveAll(_data);
-    console.log('Criados dados demo de fallback.');
-  } else {
-    normalizeDentists(_data);
-  }
-
+  // 3. FALLBACK FINAL: Gera dados demo (sem supabase e sem dados locais)
+  _data = seedDemoData();
+  saveAll(_data);
+  console.log('Criados dados demo de fallback.');
   subscribeRealtime();
+  
   return _data;
 }
 
