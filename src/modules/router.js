@@ -1,4 +1,5 @@
 import { getCurrentUser } from './store.js';
+import { toast } from '../components/toast.js';
 
 const routes = {};
 let currentRoute = null;
@@ -45,6 +46,14 @@ export function initRouter() {
   
   window.addEventListener('hashchange', handleRoute);
   handleRoute();
+
+  // Re-renderiza a página quando dados são atualizados por outro usuário (Realtime)
+  window.addEventListener('hscorp:data-updated', () => {
+    console.log('🔄 Re-renderizando página (dados atualizados por outro usuário)');
+    toast.info('📡 Dados atualizados por outro usuário');
+    handleRoute();
+  });
 }
 
 export function getCurrentRoute() { return currentRoute; }
+

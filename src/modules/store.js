@@ -8,6 +8,11 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
+// Identificador único desta instância (aba do navegador) — para ignorar nossos próprios updates no Realtime
+const _instanceId = generateId();
+let _isSaving = false;
+let _realtimeChannel = null;
+
 function getAll() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || null; } catch { return null; }
 }
@@ -41,61 +46,190 @@ async function loadFromSupabase() {
   }
 }
 
+// ─── Deep Merge Multi-Usuário ────────────────────────────
+// Coleções que são arrays de objetos com campo 'id'
+const COLLECTIONS = ['patients', 'appointments', 'transactions', 'inventory', 'attendances', 'clinicalRecords', 'treatments', 'photos'];
+
+function getRecordTimestamp(item) {
+  const ts = item.updatedAt || item.createdAt || item.date || item.startDate;
+  return ts ? new Date(ts).getTime() : 0;
+}
+
+function mergeCollections(localArr, remoteArr, deletedIds) {
+  const map = new Map();
+
+  // Adiciona itens remotos primeiro
+  for (const item of remoteArr) {
+    if (!deletedIds.has(item.id)) {
+      map.set(item.id, item);
+    }
+  }
+
+  // Sobrepõe com itens locais (mais recente vence)
+  for (const item of localArr) {
+    if (deletedIds.has(item.id)) continue;
+
+    const existing = map.get(item.id);
+    if (!existing) {
+      map.set(item.id, item);
+    } else {
+      // Compara timestamps — mantém o mais recente
+      const localTime = getRecordTimestamp(item);
+      const remoteTime = getRecordTimestamp(existing);
+      if (localTime >= remoteTime) {
+        map.set(item.id, item);
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function deepMergeData(local, remote) {
+  if (!local) return remote;
+  if (!remote) return local;
+
+  const merged = { ...local };
+
+  // Combina tombstones de deleções de ambos os lados
+  const localDeletions = local._deletions || [];
+  const remoteDeletions = remote._deletions || [];
+  const deletionMap = new Map();
+  for (const d of remoteDeletions) deletionMap.set(d.id, d);
+  for (const d of localDeletions) deletionMap.set(d.id, d);
+
+  // Limpa tombstones com mais de 7 dias
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  merged._deletions = Array.from(deletionMap.values()).filter(d => new Date(d.deletedAt).getTime() > cutoff);
+
+  const deletedIds = new Set(merged._deletions.map(d => d.id));
+
+  // Merge cada coleção de registros por ID
+  for (const col of COLLECTIONS) {
+    const localArr = local[col] || [];
+    const remoteArr = remote[col] || [];
+    merged[col] = mergeCollections(localArr, remoteArr, deletedIds);
+  }
+
+  // Merge settings (local tem prioridade, exceto dentists que tem id)
+  merged.settings = { ...(remote.settings || {}), ...(local.settings || {}) };
+  if (local.settings?.dentists || remote.settings?.dentists) {
+    merged.settings.dentists = mergeCollections(
+      local.settings?.dentists || [],
+      remote.settings?.dentists || [],
+      deletedIds
+    );
+  }
+
+  // Merge odontograms (objeto por patientId — local tem prioridade)
+  merged.odontograms = { ...(remote.odontograms || {}), ...(local.odontograms || {}) };
+
+  merged._lastModified = new Date().toISOString();
+
+  return merged;
+}
+
+// ─── Sincronização com Merge ─────────────────────────────
 function syncToServer(data) {
-  // Debounce: espera 2s sem novas alterações antes de sincronizar
   if (_syncTimeout) clearTimeout(_syncTimeout);
   _syncTimeout = setTimeout(async () => {
+    if (!supabase) { syncStatus = 'success'; return; }
+
     syncStatus = 'syncing';
-    if (supabase) {
-      const ok = await syncToSupabase(data);
+    _isSaving = true;
+
+    try {
+      // 1. Busca dados mais recentes do Supabase
+      const remoteData = await loadFromSupabase();
+
+      // 2. Merge local com remoto
+      const localData = getAll();
+      const merged = remoteData ? deepMergeData(localData, remoteData) : localData;
+      merged._instanceId = _instanceId;
+      merged._lastModified = new Date().toISOString();
+
+      // 3. Salva resultado do merge no Supabase
+      const ok = await syncToSupabase(merged);
       if (ok) {
+        _data = merged;
+        localStorage.setItem(STORE_KEY, JSON.stringify(merged));
         lastSyncTime = new Date().toISOString();
         syncStatus = 'success';
-        console.log(`💾 Dados salvos no Supabase`);
+        console.log('💾 Dados sincronizados com merge');
       } else {
         syncStatus = 'error';
       }
-    } else {
-      // Se não há Supabase, fica apenas no localStorage
-      syncStatus = 'success';
+    } catch (err) {
+      console.error('Erro na sync com merge:', err);
+      syncStatus = 'error';
+    } finally {
+      _isSaving = false;
     }
-  }, 2000);
+  }, 1500);
 }
 
-// Sync imediata — cancela o debounce e envia agora (para usar antes de reload)
+// Sync imediata com merge — para usar antes de reload (troca de perfil)
 export async function flushSync() {
   if (_syncTimeout) { clearTimeout(_syncTimeout); _syncTimeout = null; }
-  const data = getAll();
-  if (!data) return false;
+  const localData = getAll();
+  if (!localData) return false;
+
   if (supabase) {
     syncStatus = 'syncing';
-    const ok = await syncToSupabase(data);
-    if (ok) {
-      lastSyncTime = new Date().toISOString();
-      syncStatus = 'success';
-      console.log('💾 flushSync: Dados enviados ao Supabase imediatamente');
-      return true;
+    _isSaving = true;
+    try {
+      const remoteData = await loadFromSupabase();
+      const merged = remoteData ? deepMergeData(localData, remoteData) : localData;
+      merged._instanceId = _instanceId;
+      merged._lastModified = new Date().toISOString();
+
+      const ok = await syncToSupabase(merged);
+      if (ok) {
+        _data = merged;
+        localStorage.setItem(STORE_KEY, JSON.stringify(merged));
+        lastSyncTime = new Date().toISOString();
+        syncStatus = 'success';
+        sessionStorage.setItem('hscorp_just_synced', '1');
+        console.log('💾 flushSync com merge completo');
+        return true;
+      }
+      syncStatus = 'error';
+      return false;
+    } finally {
+      _isSaving = false;
     }
-    syncStatus = 'error';
-    return false;
   }
-  return true; // sem supabase, localStorage já está atualizado
+
+  sessionStorage.setItem('hscorp_just_synced', '1');
+  return true;
 }
 
 export async function forceSync() {
-  const data = getAll();
-  if (!data) return { success: false, error: 'Sem dados para sincronizar' };
-  
+  const localData = getAll();
+  if (!localData) return { success: false, error: 'Sem dados para sincronizar' };
+
   syncStatus = 'syncing';
   if (supabase) {
-    const ok = await syncToSupabase(data);
-    if (ok) {
-      lastSyncTime = new Date().toISOString();
-      syncStatus = 'success';
-      return { success: true, timestamp: lastSyncTime };
+    _isSaving = true;
+    try {
+      const remoteData = await loadFromSupabase();
+      const merged = remoteData ? deepMergeData(localData, remoteData) : localData;
+      merged._instanceId = _instanceId;
+      merged._lastModified = new Date().toISOString();
+
+      const ok = await syncToSupabase(merged);
+      if (ok) {
+        _data = merged;
+        localStorage.setItem(STORE_KEY, JSON.stringify(merged));
+        lastSyncTime = new Date().toISOString();
+        syncStatus = 'success';
+        return { success: true, timestamp: lastSyncTime };
+      }
+      syncStatus = 'error';
+      return { success: false, error: 'Falha no Supabase' };
+    } finally {
+      _isSaving = false;
     }
-    syncStatus = 'error';
-    return { success: false, error: 'Falha no Supabase' };
   } else {
     syncStatus = 'success';
     return { success: true };
@@ -103,69 +237,109 @@ export async function forceSync() {
 }
 
 export function saveAll(data) {
-  data._lastModified = new Date().toISOString(); // Marca o timestamp da última alteração
+  data._lastModified = new Date().toISOString();
+  data._instanceId = _instanceId;
+  _data = data;
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
-  syncToServer(data); // Sincroniza em background
+  syncToServer(data); // Sincroniza com merge em background
 }
 
 let _data = null;
 
+// ─── Supabase Realtime ───────────────────────────────────
+function subscribeRealtime() {
+  if (!supabase || _realtimeChannel) return;
+
+  _realtimeChannel = supabase
+    .channel('hscorp-realtime')
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'app_state',
+      filter: 'id=eq.1'
+    }, async () => {
+      // Ignora se estamos salvando (é nosso próprio update)
+      if (_isSaving) return;
+
+      // Busca dados atualizados do Supabase
+      const remoteData = await loadFromSupabase();
+      if (!remoteData) return;
+
+      // Ignora se veio da nossa própria instância
+      if (remoteData._instanceId === _instanceId) return;
+
+      console.log('📡 Dados atualizados por outro usuário — fazendo merge');
+
+      // Merge remoto com local
+      const localData = getAll();
+      const merged = deepMergeData(localData, remoteData);
+      _data = merged;
+      localStorage.setItem(STORE_KEY, JSON.stringify(merged));
+
+      // Notifica a UI para re-renderizar a página atual
+      window.dispatchEvent(new CustomEvent('hscorp:data-updated'));
+    })
+    .subscribe((status) => {
+      console.log('📡 Realtime:', status);
+    });
+}
+
+// ─── Inicialização ───────────────────────────────────────
 export async function initStore() {
   const localData = getAll();
 
-  // 1. Tenta carregar do Supabase
-  if (supabase) {
-    const remoteData = await loadFromSupabase();
-    
-    if (remoteData && localData) {
-      // Compara timestamps: usa o mais recente entre local e remoto
-      const remoteTime = remoteData._lastModified ? new Date(remoteData._lastModified).getTime() : 0;
-      const localTime = localData._lastModified ? new Date(localData._lastModified).getTime() : 0;
-      
-      if (localTime > remoteTime) {
-        // Dados locais são mais recentes — manter local e enviar para o Supabase
-        _data = localData;
-        normalizeDentists(_data);
-        syncToServer(_data);
-        console.log('✅ Dados LOCAIS são mais recentes — mantidos e enviados ao Supabase');
-        return _data;
-      } else {
-        // Dados remotos são mais recentes (ou iguais) — usar remoto
-        _data = remoteData;
-        normalizeDentists(_data);
-        localStorage.setItem(STORE_KEY, JSON.stringify(_data));
-        console.log('✅ Dados do Supabase são mais recentes — carregados');
-        return _data;
-      }
-    } else if (remoteData) {
-      // Só existe remoto
-      _data = remoteData;
-      normalizeDentists(_data);
-      localStorage.setItem(STORE_KEY, JSON.stringify(_data));
-      console.log('✅ Dados carregados do Supabase (sem dados locais)');
-      return _data;
-    } else if (localData) {
-      // Só existe local — enviar para Supabase
+  // Fast-path para troca de perfil (dados já estão sincronizados)
+  const justSynced = sessionStorage.getItem('hscorp_just_synced');
+  if (justSynced) {
+    sessionStorage.removeItem('hscorp_just_synced');
+    if (localData) {
       _data = localData;
       normalizeDentists(_data);
-      syncToServer(_data);
-      console.log('✅ Dados locais enviados ao Supabase (sem dados remotos)');
+      subscribeRealtime();
+      console.log('⚡ initStore rápido (pós-flushSync)');
       return _data;
     }
   }
 
-  // 2. Fallback para localStorage (sem Supabase)
+  // Carrega e faz merge entre local e remoto
+  if (supabase) {
+    const remoteData = await loadFromSupabase();
+
+    if (remoteData && localData) {
+      _data = deepMergeData(localData, remoteData);
+      normalizeDentists(_data);
+      localStorage.setItem(STORE_KEY, JSON.stringify(_data));
+      console.log('✅ Dados carregados com merge (local + Supabase)');
+    } else if (remoteData) {
+      _data = remoteData;
+      normalizeDentists(_data);
+      localStorage.setItem(STORE_KEY, JSON.stringify(_data));
+      console.log('✅ Dados carregados do Supabase');
+    } else if (localData) {
+      _data = localData;
+      normalizeDentists(_data);
+      syncToServer(_data);
+      console.log('✅ Dados locais enviados ao Supabase');
+    }
+
+    if (_data) {
+      subscribeRealtime();
+      return _data;
+    }
+  }
+
+  // Fallback para localStorage (sem Supabase)
   _data = localData;
-  
+
   if (!_data) {
-    // 3. Se tudo falhar, gera demo
     _data = seedDemoData();
     saveAll(_data);
     console.log('Criados dados demo de fallback.');
   } else {
     normalizeDentists(_data);
   }
-  
+
+  subscribeRealtime();
   return _data;
 }
 
@@ -190,6 +364,13 @@ export function setCurrentUser(role) {
 
 export function getData() { if (!_data) initStore(); return _data; }
 
+// ─── Rastreamento de Deleções (Tombstones) ───────────────
+function trackDeletion(data, id) {
+  if (!data._deletions) data._deletions = [];
+  data._deletions.push({ id, deletedAt: new Date().toISOString() });
+}
+
+// ─── Pacientes ───────────────────────────────────────────
 export function getPatients() { return getData().patients || []; }
 export function getPatient(id) { return getPatients().find(p => p.id === id); }
 export function savePatient(p) {
@@ -199,70 +380,113 @@ export function savePatient(p) {
   else { p.id = p.id || generateId(); p.createdAt = new Date().toISOString(); p.updatedAt = p.createdAt; d.patients.push(p); }
   saveAll(d); return p;
 }
-export function deletePatient(id) { const d = getData(); d.patients = d.patients.filter(p => p.id !== id); saveAll(d); }
+export function deletePatient(id) {
+  const d = getData();
+  trackDeletion(d, id);
+  d.patients = d.patients.filter(p => p.id !== id);
+  saveAll(d);
+}
 
+// ─── Agendamentos ────────────────────────────────────────
 export function getAppointments() { return getData().appointments || []; }
 export function getAppointment(id) { return getAppointments().find(a => a.id === id); }
 export function saveAppointment(a) {
   const d = getData();
+  a.updatedAt = new Date().toISOString();
   const idx = d.appointments.findIndex(x => x.id === a.id);
   if (idx >= 0) d.appointments[idx] = { ...d.appointments[idx], ...a };
-  else { a.id = a.id || generateId(); d.appointments.push(a); }
+  else { a.id = a.id || generateId(); a.createdAt = a.updatedAt; d.appointments.push(a); }
   saveAll(d); return a;
 }
-export function deleteAppointment(id) { const d = getData(); d.appointments = d.appointments.filter(a => a.id !== id); saveAll(d); }
+export function deleteAppointment(id) {
+  const d = getData();
+  trackDeletion(d, id);
+  d.appointments = d.appointments.filter(a => a.id !== id);
+  saveAll(d);
+}
 
+// ─── Transações Financeiras ──────────────────────────────
 export function getTransactions() { return getData().transactions || []; }
 export function saveTransaction(t) {
   const d = getData();
+  t.updatedAt = new Date().toISOString();
   const idx = d.transactions.findIndex(x => x.id === t.id);
   if (idx >= 0) d.transactions[idx] = { ...d.transactions[idx], ...t };
-  else { t.id = t.id || generateId(); d.transactions.push(t); }
+  else { t.id = t.id || generateId(); t.createdAt = t.updatedAt; d.transactions.push(t); }
   saveAll(d); return t;
 }
-export function deleteTransaction(id) { const d = getData(); d.transactions = d.transactions.filter(t => t.id !== id); saveAll(d); }
+export function deleteTransaction(id) {
+  const d = getData();
+  trackDeletion(d, id);
+  d.transactions = d.transactions.filter(t => t.id !== id);
+  saveAll(d);
+}
 
+// ─── Estoque ─────────────────────────────────────────────
 export function getInventory() { return getData().inventory || []; }
 export function saveInventoryItem(item) {
   const d = getData();
+  item.updatedAt = new Date().toISOString();
   const idx = d.inventory.findIndex(x => x.id === item.id);
   if (idx >= 0) d.inventory[idx] = { ...d.inventory[idx], ...item };
-  else { item.id = item.id || generateId(); d.inventory.push(item); }
+  else { item.id = item.id || generateId(); item.createdAt = item.updatedAt; d.inventory.push(item); }
   saveAll(d); return item;
 }
-export function deleteInventoryItem(id) { const d = getData(); d.inventory = d.inventory.filter(i => i.id !== id); saveAll(d); }
+export function deleteInventoryItem(id) {
+  const d = getData();
+  trackDeletion(d, id);
+  d.inventory = d.inventory.filter(i => i.id !== id);
+  saveAll(d);
+}
 
+// ─── Atendimentos ────────────────────────────────────────
 export function getAttendances() { return getData().attendances || []; }
 export function saveAttendance(a) {
   const d = getData();
   if (!d.attendances) d.attendances = [];
+  a.updatedAt = new Date().toISOString();
   const idx = d.attendances.findIndex(x => x.id === a.id);
   if (idx >= 0) d.attendances[idx] = { ...d.attendances[idx], ...a };
-  else { a.id = a.id || generateId(); a.createdAt = new Date().toISOString(); d.attendances.push(a); }
+  else { a.id = a.id || generateId(); a.createdAt = a.updatedAt; d.attendances.push(a); }
   saveAll(d); return a;
 }
-export function deleteAttendance(id) { const d = getData(); d.attendances = (d.attendances||[]).filter(a => a.id !== id); saveAll(d); }
+export function deleteAttendance(id) {
+  const d = getData();
+  trackDeletion(d, id);
+  d.attendances = (d.attendances || []).filter(a => a.id !== id);
+  saveAll(d);
+}
 
-
+// ─── Prontuário Clínico ──────────────────────────────────
 export function getClinicalRecords(patientId) { return (getData().clinicalRecords || []).filter(r => r.patientId === patientId); }
 export function saveClinicalRecord(r) {
   const d = getData();
   if (!d.clinicalRecords) d.clinicalRecords = [];
+  r.updatedAt = new Date().toISOString();
   const idx = d.clinicalRecords.findIndex(x => x.id === r.id);
   if (idx >= 0) d.clinicalRecords[idx] = { ...d.clinicalRecords[idx], ...r };
-  else { r.id = r.id || generateId(); d.clinicalRecords.push(r); }
+  else { r.id = r.id || generateId(); r.createdAt = r.updatedAt; d.clinicalRecords.push(r); }
   saveAll(d); return r;
 }
 
+// ─── Fotos ───────────────────────────────────────────────
 export function getPhotos(patientId) { return (getData().photos || []).filter(p => p.patientId === patientId); }
 export function savePhoto(p) {
   const d = getData();
   if (!d.photos) d.photos = [];
-  p.id = p.id || generateId(); p.createdAt = new Date().toISOString();
+  p.id = p.id || generateId();
+  p.createdAt = new Date().toISOString();
+  p.updatedAt = p.createdAt;
   d.photos.push(p); saveAll(d); return p;
 }
-export function deletePhoto(id) { const d = getData(); d.photos = (d.photos||[]).filter(p => p.id !== id); saveAll(d); }
+export function deletePhoto(id) {
+  const d = getData();
+  trackDeletion(d, id);
+  d.photos = (d.photos || []).filter(p => p.id !== id);
+  saveAll(d);
+}
 
+// ─── Odontograma ─────────────────────────────────────────
 export function getOdontogram(patientId) { return (getData().odontograms || {})[patientId] || {}; }
 export function saveOdontogram(patientId, data) {
   const d = getData();
@@ -270,16 +494,19 @@ export function saveOdontogram(patientId, data) {
   d.odontograms[patientId] = data; saveAll(d);
 }
 
+// ─── Tratamentos ─────────────────────────────────────────
 export function getTreatments(patientId) { return (getData().treatments || []).filter(t => t.patientId === patientId); }
 export function saveTreatment(t) {
   const d = getData();
   if (!d.treatments) d.treatments = [];
+  t.updatedAt = new Date().toISOString();
   const idx = d.treatments.findIndex(x => x.id === t.id);
   if (idx >= 0) d.treatments[idx] = { ...d.treatments[idx], ...t };
-  else { t.id = t.id || generateId(); d.treatments.push(t); }
+  else { t.id = t.id || generateId(); t.createdAt = t.updatedAt; d.treatments.push(t); }
   saveAll(d); return t;
 }
 
+// ─── Dados Demo ──────────────────────────────────────────
 function seedDemoData() {
   const now = new Date();
   const y = now.getFullYear(), m = now.getMonth();
@@ -316,7 +543,8 @@ function seedDemoData() {
         duration: 30 + Math.floor(Math.random() * 4) * 15,
         procedure: procedures[Math.floor(Math.random() * procedures.length)],
         dentist: dentists[Math.floor(Math.random() * dentists.length)].name,
-        status: st, notes: ''
+        status: st, notes: '',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
       });
     }
   }
@@ -338,38 +566,39 @@ function seedDemoData() {
         category: isIncome ? 'Procedimento' : categories[Math.floor(Math.random() * categories.length)],
         patientId: isIncome ? pt.id : null, patientName: isIncome ? pt.name : null,
         method: payMethods[Math.floor(Math.random() * payMethods.length)],
-        status: Math.random() > .1 ? 'paid' : 'pending'
+        status: Math.random() > .1 ? 'paid' : 'pending',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
       });
     }
   }
 
   const inventory = [
-    { id:'inv1',name:'Resina Composta Z350',category:'Material',qty:25,minQty:10,unit:'unidade',cost:85,expiry:`${y+1}-06-15` },
-    { id:'inv2',name:'Anestésico Lidocaína 2%',category:'Material',qty:50,minQty:20,unit:'tubete',cost:12,expiry:`${y}-12-30` },
-    { id:'inv3',name:'Luvas de Procedimento M',category:'Descartável',qty:500,minQty:200,unit:'unidade',cost:0.35,expiry:`${y+2}-01-01` },
-    { id:'inv4',name:'Fio de Sutura 4-0',category:'Material',qty:8,minQty:15,unit:'unidade',cost:22,expiry:`${y+1}-03-20` },
-    { id:'inv5',name:'Cimento Ionômero de Vidro',category:'Material',qty:12,minQty:5,unit:'frasco',cost:65,expiry:`${y+1}-09-10` },
-    { id:'inv6',name:'Broca Diamantada 1012',category:'Instrumento',qty:30,minQty:10,unit:'unidade',cost:8.5,expiry:null },
-    { id:'inv7',name:'Sugador Descartável',category:'Descartável',qty:150,minQty:100,unit:'unidade',cost:0.15,expiry:null },
-    { id:'inv8',name:'Algodão Rolete',category:'Descartável',qty:3,minQty:5,unit:'pacote',cost:6,expiry:null },
+    { id:'inv1',name:'Resina Composta Z350',category:'Material',qty:25,minQty:10,unit:'unidade',cost:85,expiry:`${y+1}-06-15`,updatedAt:new Date().toISOString() },
+    { id:'inv2',name:'Anestésico Lidocaína 2%',category:'Material',qty:50,minQty:20,unit:'tubete',cost:12,expiry:`${y}-12-30`,updatedAt:new Date().toISOString() },
+    { id:'inv3',name:'Luvas de Procedimento M',category:'Descartável',qty:500,minQty:200,unit:'unidade',cost:0.35,expiry:`${y+2}-01-01`,updatedAt:new Date().toISOString() },
+    { id:'inv4',name:'Fio de Sutura 4-0',category:'Material',qty:8,minQty:15,unit:'unidade',cost:22,expiry:`${y+1}-03-20`,updatedAt:new Date().toISOString() },
+    { id:'inv5',name:'Cimento Ionômero de Vidro',category:'Material',qty:12,minQty:5,unit:'frasco',cost:65,expiry:`${y+1}-09-10`,updatedAt:new Date().toISOString() },
+    { id:'inv6',name:'Broca Diamantada 1012',category:'Instrumento',qty:30,minQty:10,unit:'unidade',cost:8.5,expiry:null,updatedAt:new Date().toISOString() },
+    { id:'inv7',name:'Sugador Descartável',category:'Descartável',qty:150,minQty:100,unit:'unidade',cost:0.15,expiry:null,updatedAt:new Date().toISOString() },
+    { id:'inv8',name:'Algodão Rolete',category:'Descartável',qty:3,minQty:5,unit:'pacote',cost:6,expiry:null,updatedAt:new Date().toISOString() },
   ];
 
   const clinicalRecords = [
-    { id:'cr1',patientId:'p1',date:new Date(y,m-2,10).toISOString(),procedure:'Limpeza',dentist:'Dra. Helena Souza',notes:'Limpeza completa realizada. Gengiva saudável.',tooth:null },
-    { id:'cr2',patientId:'p1',date:new Date(y,m-1,5).toISOString(),procedure:'Restauração',dentist:'Dra. Helena Souza',notes:'Restauração em resina no dente 36, face oclusal.',tooth:'36' },
-    { id:'cr3',patientId:'p1',date:new Date(y,m,2).toISOString(),procedure:'Clareamento',dentist:'Dr. Ricardo Mendes',notes:'1ª sessão de clareamento a laser. Próxima em 15 dias.',tooth:null },
-    { id:'cr4',patientId:'p2',date:new Date(y,m-1,20).toISOString(),procedure:'Avaliação',dentist:'Dr. Ricardo Mendes',notes:'Avaliação geral. Indicado tratamento de canal no dente 46.',tooth:'46' },
-    { id:'cr5',patientId:'p2',date:new Date(y,m,1).toISOString(),procedure:'Canal',dentist:'Dr. Ricardo Mendes',notes:'Início do tratamento de canal dente 46. Primeira etapa concluída.',tooth:'46' },
+    { id:'cr1',patientId:'p1',date:new Date(y,m-2,10).toISOString(),procedure:'Limpeza',dentist:'Dra. Helena Souza',notes:'Limpeza completa realizada. Gengiva saudável.',tooth:null,updatedAt:new Date().toISOString() },
+    { id:'cr2',patientId:'p1',date:new Date(y,m-1,5).toISOString(),procedure:'Restauração',dentist:'Dra. Helena Souza',notes:'Restauração em resina no dente 36, face oclusal.',tooth:'36',updatedAt:new Date().toISOString() },
+    { id:'cr3',patientId:'p1',date:new Date(y,m,2).toISOString(),procedure:'Clareamento',dentist:'Dr. Ricardo Mendes',notes:'1ª sessão de clareamento a laser. Próxima em 15 dias.',tooth:null,updatedAt:new Date().toISOString() },
+    { id:'cr4',patientId:'p2',date:new Date(y,m-1,20).toISOString(),procedure:'Avaliação',dentist:'Dr. Ricardo Mendes',notes:'Avaliação geral. Indicado tratamento de canal no dente 46.',tooth:'46',updatedAt:new Date().toISOString() },
+    { id:'cr5',patientId:'p2',date:new Date(y,m,1).toISOString(),procedure:'Canal',dentist:'Dr. Ricardo Mendes',notes:'Início do tratamento de canal dente 46. Primeira etapa concluída.',tooth:'46',updatedAt:new Date().toISOString() },
   ];
 
   const treatments = [
-    { id:'tr1',patientId:'p1',procedure:'Clareamento a Laser',status:'in_progress',totalSessions:3,completedSessions:1,value:1500,paid:500,dentist:'Dr. Ricardo Mendes',startDate:new Date(y,m,2).toISOString() },
-    { id:'tr2',patientId:'p2',procedure:'Tratamento de Canal - Dente 46',status:'in_progress',totalSessions:3,completedSessions:1,value:1200,paid:400,dentist:'Dr. Ricardo Mendes',startDate:new Date(y,m,1).toISOString() },
-    { id:'tr3',patientId:'p4',procedure:'Ortodontia - Aparelho Fixo',status:'in_progress',totalSessions:24,completedSessions:8,value:6000,paid:2000,dentist:'Dra. Helena Souza',startDate:new Date(y,m-8,15).toISOString() },
-    { id:'tr4',patientId:'p1',procedure:'Limpeza Semestral',status:'completed',totalSessions:1,completedSessions:1,value:250,paid:250,dentist:'Dra. Helena Souza',startDate:new Date(y,m-2,10).toISOString() },
+    { id:'tr1',patientId:'p1',procedure:'Clareamento a Laser',status:'in_progress',totalSessions:3,completedSessions:1,value:1500,paid:500,dentist:'Dr. Ricardo Mendes',startDate:new Date(y,m,2).toISOString(),updatedAt:new Date().toISOString() },
+    { id:'tr2',patientId:'p2',procedure:'Tratamento de Canal - Dente 46',status:'in_progress',totalSessions:3,completedSessions:1,value:1200,paid:400,dentist:'Dr. Ricardo Mendes',startDate:new Date(y,m,1).toISOString(),updatedAt:new Date().toISOString() },
+    { id:'tr3',patientId:'p4',procedure:'Ortodontia - Aparelho Fixo',status:'in_progress',totalSessions:24,completedSessions:8,value:6000,paid:2000,dentist:'Dra. Helena Souza',startDate:new Date(y,m-8,15).toISOString(),updatedAt:new Date().toISOString() },
+    { id:'tr4',patientId:'p1',procedure:'Limpeza Semestral',status:'completed',totalSessions:1,completedSessions:1,value:250,paid:250,dentist:'Dra. Helena Souza',startDate:new Date(y,m-2,10).toISOString(),updatedAt:new Date().toISOString() },
   ];
 
-  return { patients, appointments, transactions, inventory, clinicalRecords, treatments, photos: [], odontograms: {}, attendances: [], settings: { clinicName: 'HS Corp', dentists } };
+  return { patients, appointments, transactions, inventory, clinicalRecords, treatments, photos: [], odontograms: {}, attendances: [], _deletions: [], settings: { clinicName: 'HS Corp', dentists } };
 }
 
 export function exportData() {
@@ -400,6 +629,7 @@ export function resetStore() {
     photos: [],
     odontograms: {},
     attendances: [],
+    _deletions: [],
     settings: { clinicName: 'HS Corp', dentists: [] }
   };
   _data = emptyData;

@@ -177,8 +177,10 @@ export function renderHeader() {
       // Aguarda a sincronização imediata antes de recarregar
       // para garantir que dados recentes cheguem ao Supabase
       btnConfirmSwitch.disabled = true;
-      btnConfirmSwitch.textContent = 'Sincronizando...';
+      btnConfirmSwitch.textContent = 'Entrando...';
       await flushSync();
+      // Redireciona ao Dashboard antes de recarregar
+      window.location.hash = '#/';
       window.location.reload();
     } else {
       alert('Senha incorreta!');
