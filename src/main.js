@@ -17,6 +17,7 @@ import { renderSettings } from './modules/settings.js';
 import { renderWhatsapp } from './modules/whatsapp.js';
 import { renderDentists } from './modules/dentists.js';
 import { renderDentistProfile } from './modules/dentist-profile.js';
+import { renderDentistPortal } from './modules/dentist-portal.js';
 
 // Initialize (async porque initStore pode restaurar dados do servidor)
 async function bootstrap() {
@@ -41,6 +42,7 @@ async function bootstrap() {
   registerRoute('/whatsapp', renderWhatsapp);
   registerRoute('/dentistas', renderDentists);
   registerRoute('/dentista', (container, id) => renderDentistProfile(container, id));
+  registerRoute('/portal', renderDentistPortal);
 
   // Start router
   initRouter();

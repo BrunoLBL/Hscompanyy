@@ -29,6 +29,17 @@ export function renderDentistProfile(container, id) {
   const totalValue = dentistTreatments.reduce((sum, t) => sum + (Number(t.value) || 0), 0);
   const totalPaid = dentistTreatments.reduce((sum, t) => sum + (Number(t.paid) || 0), 0);
 
+  // Média de Tempo
+  const timedTreatments = dentistTreatments.filter(t => t.durationSeconds > 0);
+  const avgSeconds = timedTreatments.length > 0 
+    ? Math.round(timedTreatments.reduce((sum, t) => sum + t.durationSeconds, 0) / timedTreatments.length)
+    : 0;
+  const avgMins = Math.floor(avgSeconds / 60);
+  const avgSecs = avgSeconds % 60;
+  const avgTimeStr = timedTreatments.length > 0 
+    ? `${String(avgMins).padStart(2, '0')}:${String(avgSecs).padStart(2, '0')} min` 
+    : '--:--';
+
   const isFreelancer = dentist.type === 'freelancer';
   const typeLabel = isFreelancer ? 'Freelancer' : 'Fixo';
   const typeBg = isFreelancer ? 'var(--accent-warn)' : 'var(--accent-info)';
@@ -95,6 +106,16 @@ export function renderDentistProfile(container, id) {
           <div style="font-size:1.5rem;font-weight:700;color:var(--text);">${formatCurrency(totalPaid)}</div>
         </div>
       </div>
+
+      <div class="card" style="display:flex;align-items:center;gap:16px;">
+        <div style="width:48px;height:48px;border-radius:var(--radius);background:rgba(245,158,11,0.1);color:#f59e0b;display:flex;align-items:center;justify-content:center;">
+          ${icon('clock', 24)}
+        </div>
+        <div>
+          <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">Tempo Médio de Atendimento</div>
+          <div style="font-size:1.5rem;font-weight:700;color:var(--text);">${avgTimeStr}</div>
+        </div>
+      </div>
     </div>
 
     <!-- Tabela de Produção -->
@@ -110,6 +131,7 @@ export function renderDentistProfile(container, id) {
               <th>Data</th>
               <th>Paciente</th>
               <th>Procedimento</th>
+              <th>Tempo</th>
               <th>Status</th>
               <th style="text-align:right;">Valor</th>
               <th style="text-align:right;">Pago</th>
@@ -129,6 +151,10 @@ export function renderDentistProfile(container, id) {
               else if(t.status === 'cancelled') statusBadge = `<span style="color:#ef4444;background:rgba(239,68,68,0.1);padding:2px 8px;border-radius:12px;font-size:0.75rem;">Cancelado</span>`;
               else statusBadge = `<span style="color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 8px;border-radius:12px;font-size:0.75rem;">Em andamento</span>`;
               
+              const tMins = Math.floor((t.durationSeconds||0)/60);
+              const tSecs = (t.durationSeconds||0)%60;
+              const timeFormatted = t.durationSeconds ? `${String(tMins).padStart(2,'0')}:${String(tSecs).padStart(2,'0')}` : '-';
+
               return `
               <tr>
                 <td style="white-space:nowrap;">${formatDate(t.startDate)}</td>
@@ -138,6 +164,7 @@ export function renderDentistProfile(container, id) {
                   </a>
                 </td>
                 <td>${t.procedure}</td>
+                <td><span style="font-size:0.8rem;color:var(--text-muted);font-family:monospace;">${timeFormatted}</span></td>
                 <td>${statusBadge}</td>
                 <td style="text-align:right;font-weight:600;">${formatCurrency(t.value)}</td>
                 <td style="text-align:right;color:#10b981;">${formatCurrency(t.paid)}</td>

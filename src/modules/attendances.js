@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatDate } from '../utils/helpers.js';
-import { getAttendances, saveAttendance, deleteAttendance, getPatients, saveTransaction, saveClinicalRecord, getAppointments, saveAppointment, getData, saveTreatment } from './store.js';
+import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
@@ -201,45 +201,9 @@ function finishAttendance(id, parentContainer) {
 
   if (!confirm('Deseja concluir este atendimento? O valor será lançado no financeiro.')) return;
 
-  // Lança o financeiro (income, pago)
-  saveTransaction({
-    type: 'income',
-    date: new Date().toISOString().slice(0, 10),
-    amount: attendance.value,
-    description: attendance.procedure,
-    category: 'Procedimento',
-    patientId: attendance.patientId,
-    patientName: attendance.patientName,
-    method: 'PIX', // Padrão
-    status: 'paid'
-  });
-
-  // Adiciona ao Prontuário / Histórico Clínico
-  saveClinicalRecord({
-    patientId: attendance.patientId,
-    date: new Date().toISOString(),
-    procedure: attendance.procedure,
-    dentist: attendance.dentist || 'Recepção', // Agora puxa o dentista correto
-    notes: 'Realizado e concluído no atendimento.',
-    tooth: null
-  });
-
-  // Salva também como um tratamento concluído para registrar a produção financeira do dentista
-  saveTreatment({
-    patientId: attendance.patientId,
-    procedure: attendance.procedure,
-    totalSessions: 1,
-    completedSessions: 1,
-    value: attendance.value,
-    paid: attendance.value,
-    dentist: attendance.dentist || 'Recepção',
-    status: 'completed',
-    startDate: new Date().toISOString()
-  });
-
-  // Remove da lista de atendimentos em aberto
-  deleteAttendance(id);
-
-  toast.success('Atendimento concluído e financeiro atualizado!');
-  renderAttendances(parentContainer);
+  // Utiliza a função centralizada de fechamento
+  if (completeAttendanceProcess(id, 0)) {
+    toast.success('Atendimento concluído e financeiro atualizado!');
+    renderAttendances(parentContainer);
+  }
 }

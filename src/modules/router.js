@@ -32,6 +32,18 @@ export function initRouter() {
     const content = document.getElementById('page-content');
     if (!content) return;
     
+    // Configurações de layout (Portal vs Sistema Padrão)
+    const isPortal = path === '/portal';
+    const sidebar = document.querySelector('.sidebar');
+    const header = document.querySelector('.top-header');
+    const mainContent = document.querySelector('.main-content');
+    
+    if (sidebar) sidebar.style.display = isPortal ? 'none' : 'flex';
+    if (header) header.style.display = isPortal ? 'none' : 'flex';
+    if (mainContent) {
+      mainContent.style.marginLeft = isPortal ? '0' : '260px'; // 260px é a largura padrão da sidebar
+    }
+    
     currentRoute = path;
     content.style.animation = 'none';
     content.offsetHeight; // trigger reflow

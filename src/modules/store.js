@@ -477,6 +477,35 @@ export function deleteAttendance(id) {
   saveAll(d);
 }
 
+export function completeAttendanceProcess(id, durationSeconds = 0) {
+  const attendance = getAttendances().find(a => a.id === id);
+  if (!attendance) return false;
+
+  saveTransaction({
+    type: 'income', date: new Date().toISOString().slice(0, 10),
+    amount: attendance.value, description: attendance.procedure,
+    category: 'Procedimento', patientId: attendance.patientId,
+    patientName: attendance.patientName, method: 'PIX', status: 'paid'
+  });
+
+  saveClinicalRecord({
+    patientId: attendance.patientId, date: new Date().toISOString(),
+    procedure: attendance.procedure, dentist: attendance.dentist || 'Recepção',
+    notes: 'Realizado e concluído no atendimento.', tooth: null
+  });
+
+  saveTreatment({
+    patientId: attendance.patientId, procedure: attendance.procedure,
+    totalSessions: 1, completedSessions: 1, value: attendance.value, paid: attendance.value,
+    dentist: attendance.dentist || 'Recepção', status: 'completed',
+    startDate: new Date().toISOString(),
+    durationSeconds: durationSeconds // Novo campo para média de tempo
+  });
+
+  deleteAttendance(id);
+  return true;
+}
+
 // ─── Prontuário Clínico ──────────────────────────────────
 export function getClinicalRecords(patientId) { return (getData().clinicalRecords || []).filter(r => r.patientId === patientId); }
 export function saveClinicalRecord(r) {
