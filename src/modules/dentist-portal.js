@@ -107,7 +107,7 @@ function renderPanel(container, dentistName) {
   container.innerHTML = `
     <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;">
       <!-- Header do Portal -->
-      <header style="background:#fff;padding:16px 32px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,0.02);">
+      <header style="background:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,0.02);flex-wrap:wrap;gap:12px;">
         <div style="display:flex;align-items:center;gap:12px;">
           <div style="width:40px;height:40px;background:var(--primary);color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;">
             ${icon('activity', 20)}
@@ -118,18 +118,18 @@ function renderPanel(container, dentistName) {
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:16px;">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:600;">
-            <div style="width:32px;height:32px;background:var(--bg-lighter);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:0.9rem;">
+            <div style="width:32px;height:32px;background:var(--bg-lighter);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.8rem;">
               ${dentistName.charAt(0)}
             </div>
-            ${dentistName}
+            <span class="portal-dentist-name" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dentistName}</span>
           </div>
           <button class="btn btn-secondary btn-sm" id="portalLogoutBtn">${icon('logOut', 14)} Sair</button>
         </div>
       </header>
 
       <!-- Conteúdo Principal -->
-      <main style="flex:1;padding:32px;max-width:1200px;margin:0 auto;width:100%;">
+      <main style="flex:1;padding:20px;max-width:1200px;margin:0 auto;width:100%;">
         <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;">
           <div>
             <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:4px;">Meus Pacientes Aguardando</h2>
@@ -144,9 +144,9 @@ function renderPanel(container, dentistName) {
             <p style="color:var(--text-secondary);">Sua sala está livre. Aguardando a recepção enviar o próximo paciente.</p>
           </div>
         ` : `
-          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(350px, 1fr));gap:24px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:20px;">
             ${attendances.map(a => `
-              <div class="card" style="display:flex;flex-direction:column;border-left:4px solid var(--accent);box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+              <div class="card" style="display:flex;flex-direction:column;border-left:4px solid var(--accent);box-shadow:0 4px 20px rgba(0,0,0,0.04);padding:20px;">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
                   <div>
                     <h3 style="font-size:1.3rem;font-weight:700;margin-bottom:4px;">${a.patientName}</h3>

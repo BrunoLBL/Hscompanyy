@@ -34,14 +34,22 @@ export function initRouter() {
     
     // Configurações de layout (Portal vs Sistema Padrão)
     const isPortal = path === '/portal';
-    const sidebar = document.querySelector('.sidebar');
-    const header = document.querySelector('.top-header');
-    const mainContent = document.querySelector('.main-content');
+    const sidebar = document.getElementById('sidebar');
+    const header = document.getElementById('top-header');
+    const mainContent = document.getElementById('main-wrapper');
+    const pageContent = document.getElementById('page-content');
     
     if (sidebar) sidebar.style.display = isPortal ? 'none' : 'flex';
     if (header) header.style.display = isPortal ? 'none' : 'flex';
     if (mainContent) {
-      mainContent.style.marginLeft = isPortal ? '0' : '260px'; // 260px é a largura padrão da sidebar
+      // Quando no celular, a sidebar já é position fixed, então não há margin-left por padrão na mídia
+      // Mas para garantir que na web/desktop ocupe tudo:
+      if (window.innerWidth > 1024) {
+        mainContent.style.marginLeft = isPortal ? '0' : 'var(--sidebar-w)'; 
+      }
+    }
+    if (pageContent) {
+      pageContent.style.padding = isPortal ? '0' : '28px';
     }
     
     currentRoute = path;
