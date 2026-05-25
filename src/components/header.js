@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { getPatients, getCurrentUser, setCurrentUser } from '../modules/store.js';
+import { getPatients, getCurrentUser, setCurrentUser, flushSync } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { debounce } from '../utils/helpers.js';
 
@@ -171,9 +171,14 @@ export function renderHeader() {
   });
   
   // Confirm password
-  const confirmSwitch = () => {
+  const confirmSwitch = async () => {
     if (switcherPwd.value === '123') {
       setCurrentUser(targetUser);
+      // Aguarda a sincronização imediata antes de recarregar
+      // para garantir que dados recentes cheguem ao Supabase
+      btnConfirmSwitch.disabled = true;
+      btnConfirmSwitch.textContent = 'Sincronizando...';
+      await flushSync();
       window.location.reload();
     } else {
       alert('Senha incorreta!');

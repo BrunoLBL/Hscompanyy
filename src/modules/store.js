@@ -62,6 +62,26 @@ function syncToServer(data) {
   }, 2000);
 }
 
+// Sync imediata — cancela o debounce e envia agora (para usar antes de reload)
+export async function flushSync() {
+  if (_syncTimeout) { clearTimeout(_syncTimeout); _syncTimeout = null; }
+  const data = getAll();
+  if (!data) return false;
+  if (supabase) {
+    syncStatus = 'syncing';
+    const ok = await syncToSupabase(data);
+    if (ok) {
+      lastSyncTime = new Date().toISOString();
+      syncStatus = 'success';
+      console.log('💾 flushSync: Dados enviados ao Supabase imediatamente');
+      return true;
+    }
+    syncStatus = 'error';
+    return false;
+  }
+  return true; // sem supabase, localStorage já está atualizado
+}
+
 export async function forceSync() {
   const data = getAll();
   if (!data) return { success: false, error: 'Sem dados para sincronizar' };
@@ -83,6 +103,7 @@ export async function forceSync() {
 }
 
 export function saveAll(data) {
+  data._lastModified = new Date().toISOString(); // Marca o timestamp da última alteração
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
   syncToServer(data); // Sincroniza em background
 }
@@ -90,20 +111,51 @@ export function saveAll(data) {
 let _data = null;
 
 export async function initStore() {
-  // 1. Tenta carregar do Supabase primeiro
+  const localData = getAll();
+
+  // 1. Tenta carregar do Supabase
   if (supabase) {
     const remoteData = await loadFromSupabase();
-    if (remoteData) {
+    
+    if (remoteData && localData) {
+      // Compara timestamps: usa o mais recente entre local e remoto
+      const remoteTime = remoteData._lastModified ? new Date(remoteData._lastModified).getTime() : 0;
+      const localTime = localData._lastModified ? new Date(localData._lastModified).getTime() : 0;
+      
+      if (localTime > remoteTime) {
+        // Dados locais são mais recentes — manter local e enviar para o Supabase
+        _data = localData;
+        normalizeDentists(_data);
+        syncToServer(_data);
+        console.log('✅ Dados LOCAIS são mais recentes — mantidos e enviados ao Supabase');
+        return _data;
+      } else {
+        // Dados remotos são mais recentes (ou iguais) — usar remoto
+        _data = remoteData;
+        normalizeDentists(_data);
+        localStorage.setItem(STORE_KEY, JSON.stringify(_data));
+        console.log('✅ Dados do Supabase são mais recentes — carregados');
+        return _data;
+      }
+    } else if (remoteData) {
+      // Só existe remoto
       _data = remoteData;
       normalizeDentists(_data);
       localStorage.setItem(STORE_KEY, JSON.stringify(_data));
-      console.log('✅ Dados carregados do Supabase');
+      console.log('✅ Dados carregados do Supabase (sem dados locais)');
+      return _data;
+    } else if (localData) {
+      // Só existe local — enviar para Supabase
+      _data = localData;
+      normalizeDentists(_data);
+      syncToServer(_data);
+      console.log('✅ Dados locais enviados ao Supabase (sem dados remotos)');
       return _data;
     }
   }
 
-  // 2. Fallback para localStorage
-  _data = getAll();
+  // 2. Fallback para localStorage (sem Supabase)
+  _data = localData;
   
   if (!_data) {
     // 3. Se tudo falhar, gera demo
@@ -112,7 +164,6 @@ export async function initStore() {
     console.log('Criados dados demo de fallback.');
   } else {
     normalizeDentists(_data);
-    if (supabase) syncToServer(_data); // sob a nuvem se estiver vazia mas tiver local
   }
   
   return _data;
