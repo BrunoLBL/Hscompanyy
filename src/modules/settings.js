@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { getData, exportData, importData, resetStore, getCurrentUser, forceSync, lastSyncTime, syncStatus, saveAll } from '../modules/store.js';
+import { getData, exportData, importData, resetStore, getCurrentUser, forceSync, lastSyncTime, syncStatus, saveAll, trackDeletion, flushSync } from '../modules/store.js';
 import { generateId } from '../utils/helpers.js';
 import { toast } from '../components/toast.js';
 
@@ -159,6 +159,7 @@ export function renderSettings(container) {
       btn.onclick = (e) => {
         const id = e.currentTarget.dataset.id;
         currentDentists = currentDentists.filter(d => d.id !== id);
+        trackDeletion(data, id); // Registra a deleção no histórico
         renderDentistsList();
       };
     });
@@ -240,17 +241,24 @@ export function renderSettings(container) {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (importData(ev.target.result)) { toast.success('Dados importados! Recarregando...'); setTimeout(() => location.reload(), 1000); }
+      reader.onload = async (ev) => {
+        if (importData(ev.target.result)) { 
+          toast.success('Sincronizando importação...');
+          await flushSync();
+          toast.success('Dados importados! Recarregando...'); 
+          setTimeout(() => location.reload(), 500); 
+        }
         else toast.error('Arquivo inválido');
       };
       reader.readAsText(file);
     };
-    document.getElementById('clearBtn').onclick = () => {
+    document.getElementById('clearBtn').onclick = async () => {
       if (confirm('ATENÇÃO: Isso irá apagar TODOS os dados. Deseja continuar?')) {
         resetStore();
+        toast.success('Sincronizando limpeza com o servidor...');
+        await flushSync();
         toast.success('Dados limpos! Recarregando...');
-        setTimeout(() => location.reload(), 1000);
+        setTimeout(() => location.reload(), 500);
       }
     };
   }

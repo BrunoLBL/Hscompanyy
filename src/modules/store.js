@@ -385,7 +385,7 @@ export function setCurrentUser(role) {
 export function getData() { if (!_data) initStore(); return _data; }
 
 // ─── Rastreamento de Deleções (Tombstones) ───────────────
-function trackDeletion(data, id) {
+export function trackDeletion(data, id) {
   if (!data._deletions) data._deletions = [];
   data._deletions.push({ id, deletedAt: new Date().toISOString() });
 }
