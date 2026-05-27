@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatDate, isToday, generateId } from '../utils/helpers.js';
-import { getAppointments, saveAppointment, deleteAppointment, getPatients, getData } from '../modules/store.js';
+import { getAppointments, saveAppointment, deleteAppointment, getPatients, getData, completeAppointmentProcess } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
@@ -208,6 +208,7 @@ function openApptDetail(appt, parentContainer) {
         <div><label style="font-size:.75rem;color:var(--text-muted)">Data</label><p>${formatDate(appt.date)}</p></div>
         <div><label style="font-size:.75rem;color:var(--text-muted)">Horário</label><p>${appt.time} (${appt.duration}min)</p></div>
         <div><label style="font-size:.75rem;color:var(--text-muted)">Dentista</label><p>${appt.dentist}</p></div>
+        <div><label style="font-size:.75rem;color:var(--text-muted)">Valor</label><p>R$ ${Number(appt.value || 0).toFixed(2).replace('.', ',')}</p></div>
         <div><label style="font-size:.75rem;color:var(--text-muted)">Status</label><p><span class="status-badge status-${appt.status}">${statusLabels[appt.status]}</span></p></div>
       </div>`,
     footer: `
@@ -227,7 +228,11 @@ function openApptDetail(appt, parentContainer) {
     saveAppointment({ ...appt, status: 'confirmed' }); closeAllModals(); toast.success('Consulta confirmada!'); renderScheduling(parentContainer);
   });
   modal.querySelector('#completeAppt')?.addEventListener('click', () => {
-    saveAppointment({ ...appt, status: 'completed' }); closeAllModals(); toast.success('Consulta concluída!'); renderScheduling(parentContainer);
+    if (confirm('Deseja concluir esta consulta? O valor será lançado no financeiro.')) {
+      if (completeAppointmentProcess(appt.id)) {
+        closeAllModals(); toast.success('Consulta concluída e financeiro atualizado!'); renderScheduling(parentContainer);
+      }
+    }
   });
 }
 
@@ -263,7 +268,10 @@ function openApptForm(defaults = {}, parentContainer) {
             ${dentists.map(d => `<option value="${d.name}">${d.name}</option>`).join('')}
           </select></div>
       </div>
-      <div class="form-group"><label>Observações</label><textarea id="apptNotes" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Valor (R$)</label><input type="number" id="apptValue" step="0.01" min="0" placeholder="0.00" value="${defaults.value || ''}"/></div>
+        <div class="form-group"><label>Observações</label><textarea id="apptNotes" rows="2"></textarea></div>
+      </div>
     `,
     footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
       <button class="btn btn-primary" id="saveApptBtn">Agendar</button>`
@@ -279,6 +287,7 @@ function openApptForm(defaults = {}, parentContainer) {
       date: modal.querySelector('#apptDate').value, time: modal.querySelector('#apptTime').value,
       duration: +modal.querySelector('#apptDur').value, procedure: proc,
       dentist: modal.querySelector('#apptDentist').value, status: 'pending',
+      value: Number(modal.querySelector('#apptValue').value) || 0,
       notes: modal.querySelector('#apptNotes').value.trim()
     });
     closeAllModals(); toast.success('Consulta agendada com sucesso!');

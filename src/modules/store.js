@@ -572,6 +572,42 @@ export function deleteAppointment(id) {
   saveAll(d);
 }
 
+export function completeAppointmentProcess(id) {
+  const appt = getAppointment(id);
+  if (!appt) return false;
+
+  appt.status = 'completed';
+  saveAppointment(appt);
+
+  const value = Number(appt.value) || 0;
+  
+  if (value > 0) {
+    saveTransaction({
+      type: 'income', date: new Date().toISOString().slice(0, 10),
+      amount: value, description: appt.procedure,
+      category: 'Procedimento', patientId: appt.patientId,
+      patientName: appt.patientName, method: 'PIX', status: 'paid'
+    });
+  }
+
+  saveClinicalRecord({
+    patientId: appt.patientId, date: new Date().toISOString(),
+    procedure: appt.procedure, dentist: appt.dentist || 'Recepção',
+    notes: 'Realizado e concluído pela agenda.', tooth: null
+  });
+
+  saveTreatment({
+    patientId: appt.patientId, procedure: appt.procedure,
+    totalSessions: 1, completedSessions: 1, value: value, paid: value,
+    dentist: appt.dentist || 'Recepção', status: 'completed',
+    startDate: new Date().toISOString(),
+    durationSeconds: (appt.duration || 0) * 60
+  });
+
+  return true;
+}
+
+
 // ─── Transações Financeiras ──────────────────────────────
 export function getTransactions() { return getData().transactions || []; }
 export function saveTransaction(t) {
