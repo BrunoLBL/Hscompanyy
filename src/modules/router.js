@@ -1,4 +1,4 @@
-import { getCurrentUser } from './store.js';
+import { getLoggedUser } from './store.js';
 import { toast } from '../components/toast.js';
 
 const routes = {};
@@ -10,6 +10,29 @@ export function navigate(path) {
   window.location.hash = path;
 }
 
+// Mapa de rota → permissão necessária
+const routePermissions = {
+  '/': 'dashboard',
+  '/atendimentos': 'atendimentos',
+  '/pacientes': 'pacientes',
+  '/prontuario': 'pacientes',
+  '/inadimplentes': 'pacientes',
+  '/agenda': 'agenda',
+  '/financeiro': 'financeiro',
+  '/estoque': 'estoque',
+  '/relatorios': 'relatorios',
+  '/configuracoes': 'configuracoes',
+  '/whatsapp': 'whatsapp',
+  '/dentistas': 'dentistas',
+  '/dentista': 'dentistas',
+  '/portal': 'portal',
+  '/prontuario-dentista': 'portal',
+  '/estoque-dentista': 'portal'
+};
+
+// Rotas de portal (sem sidebar/header)
+const portalRoutes = ['/portal', '/prontuario-dentista', '/estoque-dentista'];
+
 export function initRouter() {
   function handleRoute() {
     let hash = window.location.hash.slice(1) || '/';
@@ -17,11 +40,20 @@ export function initRouter() {
     let path = '/' + (parts[0] || '');
     const params = parts.slice(1);
     
-    // Guard restrict routes
-    const currentUser = getCurrentUser();
-    if (currentUser !== 'Administrador' && (path === '/financeiro' || path === '/relatorios')) {
-      window.location.hash = '/';
-      return;
+    // Guard de permissões
+    const loggedUser = getLoggedUser();
+    if (loggedUser) {
+      const requiredPerm = routePermissions[path];
+      if (requiredPerm && !loggedUser.permissions.includes(requiredPerm)) {
+        // Dentista tentando acessar algo que não é portal
+        if (loggedUser.role === 'dentista') {
+          window.location.hash = '#/portal';
+          return;
+        }
+        toast.error('Você não tem permissão para acessar esta página.');
+        window.location.hash = '#/';
+        return;
+      }
     }
     
     // Update active nav
@@ -33,7 +65,7 @@ export function initRouter() {
     if (!content) return;
     
     // Configurações de layout (Portal vs Sistema Padrão)
-    const isPortal = path === '/portal';
+    const isPortal = portalRoutes.includes(path);
     const sidebar = document.getElementById('sidebar');
     const header = document.getElementById('top-header');
     const pageContent = document.getElementById('page-content');
@@ -68,4 +100,3 @@ export function initRouter() {
 }
 
 export function getCurrentRoute() { return currentRoute; }
-

@@ -92,7 +92,7 @@ export function renderPatients(container) {
 
 export function openPatientForm(patient = null) {
   const isEdit = !!patient;
-  const p = patient || { name:'',cpf:'',phone:'',email:'',birth:'',gender:'',address:'',status:'active',tags:[],notes:'' };
+  const p = patient || { name:'',cpf:'',phone:'',email:'',birth:'',gender:'',address:'',status:'active',tags:[],notes:'',isDefaulter:null };
   
   const modal = openModal({
     title: isEdit ? 'Editar Paciente' : 'Novo Paciente',
@@ -117,8 +117,15 @@ export function openPatientForm(patient = null) {
         <div class="form-group"><label>Status</label>
           <select id="pStatus"><option value="active" ${p.status==='active'?'selected':''}>Ativo</option><option value="inactive" ${p.status==='inactive'?'selected':''}>Inativo</option></select>
         </div>
-        <div class="form-group"><label>Tags (separadas por vírgula)</label><input type="text" id="pTags" value="${(p.tags||[]).join(', ')}"/></div>
+        <div class="form-group"><label>Inadimplente *</label>
+          <select id="pDefaulter">
+            <option value="">Selecione</option>
+            <option value="true" ${p.isDefaulter===true?'selected':''}>Sim</option>
+            <option value="false" ${p.isDefaulter===false?'selected':''}>Não</option>
+          </select>
+        </div>
       </div>
+      <div class="form-group"><label>Tags (separadas por vírgula) *</label><input type="text" id="pTags" value="${(p.tags||[]).join(', ')}" placeholder="Ex: CONVENIO, PARTICULAR"/></div>
       <div class="form-group"><label>Observações</label><textarea id="pNotes" rows="3">${p.notes||''}</textarea></div>
     `,
     footer: `<button class="btn btn-secondary" id="cancelPatient">Cancelar</button><button class="btn btn-primary" id="savePatient">${isEdit?'Salvar Alterações':'Cadastrar'}</button>`
@@ -128,6 +135,15 @@ export function openPatientForm(patient = null) {
   modal.querySelector('#savePatient').onclick = () => {
     const name = modal.querySelector('#pName').value.trim();
     if (!name) { toast.error('Nome é obrigatório'); return; }
+
+    const defVal = modal.querySelector('#pDefaulter').value;
+    if (!defVal) { toast.error('Selecione se o paciente é Inadimplente'); return; }
+    const isDefaulter = defVal === 'true';
+
+    const tagsInput = modal.querySelector('#pTags').value;
+    const tagsArray = tagsInput.split(',').map(t=>t.trim().toUpperCase()).filter(Boolean);
+    if (tagsArray.length === 0) { toast.error('É obrigatório adicionar pelo menos uma tag'); return; }
+
     const data = {
       ...p,
       name,
@@ -138,12 +154,18 @@ export function openPatientForm(patient = null) {
       gender: modal.querySelector('#pGender').value,
       address: modal.querySelector('#pAddress').value.trim(),
       status: modal.querySelector('#pStatus').value,
-      tags: modal.querySelector('#pTags').value.split(',').map(t=>t.trim()).filter(Boolean),
-      notes: modal.querySelector('#pNotes').value.trim()
+      tags: tagsArray,
+      notes: modal.querySelector('#pNotes').value.trim(),
+      isDefaulter
     };
     savePatient(data);
     closeAllModals();
     toast.success(isEdit ? 'Paciente atualizado!' : 'Paciente cadastrado!');
-    navigate('/pacientes');
+    
+    if (isDefaulter) {
+      navigate('/inadimplentes');
+    } else {
+      navigate('/pacientes');
+    }
   };
 }

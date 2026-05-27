@@ -1,12 +1,17 @@
 import { icon } from '../utils/icons.js';
-import { getPatients, getCurrentUser, setCurrentUser, flushSync } from '../modules/store.js';
+import { getPatients, getLoggedUser, logoutUser, addLog, getInventoryNotifications } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { debounce } from '../utils/helpers.js';
 
 export function renderHeader() {
   const header = document.getElementById('top-header');
-  const currentUser = getCurrentUser();
-  const currentAvatar = currentUser.substring(0, 1).toUpperCase();
+  const loggedUser = getLoggedUser();
+  const userName = loggedUser?.name || 'Usuário';
+  const userRole = loggedUser?.role === 'admin' ? 'Administrador' : loggedUser?.role === 'recepcao' ? 'Recepção' : 'Dentista';
+  const currentAvatar = userName.substring(0, 1).toUpperCase();
+  
+  // Conta notificações de estoque pendentes
+  const pendingNotifs = getInventoryNotifications().filter(n => n.status === 'pending').length;
 
   header.innerHTML = `
     <div class="header-left">
@@ -20,13 +25,29 @@ export function renderHeader() {
     <div class="header-right">
       <button class="header-btn" id="notifBtn" title="Notificações">
         ${icon('bell')}
-        <span class="notif-dot"></span>
+        ${pendingNotifs > 0 ? `<span class="notif-dot">${pendingNotifs}</span>` : ''}
       </button>
-      <div class="header-user">
+      <div class="header-user" style="position:relative;">
         <div class="header-user-avatar">${currentAvatar}</div>
         <div class="header-user-info">
-          <span class="header-user-name" id="current-user-name">${currentUser}</span>
-          <span class="header-user-role">HS Corp</span>
+          <span class="header-user-name" id="current-user-name">${userName}</span>
+          <span class="header-user-role">${userRole}</span>
+        </div>
+        
+        <div class="profile-dropdown" id="profileDropdown">
+          <div class="profile-dropdown-current">
+            <div class="profile-avatar-large">${currentAvatar}</div>
+            <h3>${userName}</h3>
+            <p>${userRole}</p>
+          </div>
+          <div class="profile-dropdown-list">
+            <div class="profile-switch-item" id="logoutBtn">
+              <div class="profile-avatar-small" style="background:var(--accent-danger);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </div>
+              <div class="profile-switch-item-text">Sair do Sistema</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -74,126 +95,27 @@ export function renderHeader() {
     document.getElementById('sidebar').classList.toggle('open');
   });
 
-  // Profile Switcher (Animated Dropdown)
-  const headerRight = header.querySelector('.header-right');
+  // Profile dropdown toggle
   const headerUser = header.querySelector('.header-user');
-  
-  const targetUser = currentUser === 'Administrador' ? 'Recepção' : 'Administrador';
-  const targetAvatar = targetUser.substring(0, 1).toUpperCase();
-  
-  // Inject the dropdown HTML right after the user button
-  const dropdownHTML = `
-    <div class="profile-dropdown" id="profileDropdown">
-      <div class="profile-dropdown-current">
-        <div class="profile-avatar-large">${currentAvatar}</div>
-        <h3>${currentUser}</h3>
-        <p>clinica@hscorp.com</p>
-      </div>
-      <div class="profile-dropdown-list">
-        <div class="profile-switch-item" id="switchProfileBtn">
-          <div class="profile-avatar-small">${targetAvatar}</div>
-          <div class="profile-switch-item-text">Alternar para ${targetUser}</div>
-        </div>
-      </div>
-      
-      <!-- Password Overlay -->
-      <div class="profile-pwd-overlay" id="profilePwdOverlay">
-        <button class="profile-pwd-back" id="pwdBackBtn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          Voltar
-        </button>
-        <div style="text-align:center; margin-bottom: 20px;">
-          <div class="profile-avatar-large" style="width:48px;height:48px;font-size:1.2rem;margin-bottom:8px;">${targetAvatar}</div>
-          <h4 style="font-size: 1rem; font-weight: 600;">${targetUser}</h4>
-        </div>
-        <div class="form-group">
-          <input type="password" id="switcher-pwd" class="input" placeholder="Digite a senha..." />
-        </div>
-        <button class="btn btn-primary" id="btn-confirm-switch" style="width:100%; justify-content:center;">Entrar</button>
-      </div>
-    </div>
-  `;
-  
-  // Create wrapper to hold the absolute dropdown relative to the user area
-  const userWrapper = document.createElement('div');
-  userWrapper.style.position = 'relative';
-  
-  // Move headerUser inside userWrapper
-  headerUser.parentNode.insertBefore(userWrapper, headerUser);
-  userWrapper.appendChild(headerUser);
-  
-  // Append dropdown
-  userWrapper.insertAdjacentHTML('beforeend', dropdownHTML);
-  
   const dropdown = document.getElementById('profileDropdown');
-  const switchProfileBtn = document.getElementById('switchProfileBtn');
-  const pwdOverlay = document.getElementById('profilePwdOverlay');
-  const pwdBackBtn = document.getElementById('pwdBackBtn');
-  const switcherPwd = document.getElementById('switcher-pwd');
-  const btnConfirmSwitch = document.getElementById('btn-confirm-switch');
   
-  // Toggle dropdown on user click
   headerUser.addEventListener('click', (e) => {
     e.stopPropagation();
     dropdown.classList.toggle('open');
-    if (!dropdown.classList.contains('open')) {
-      // Reset overlay when closing
-      setTimeout(() => {
-        pwdOverlay.classList.remove('active');
-        switcherPwd.value = '';
-      }, 300);
-    }
   });
-  
-  // Click outside to close
+
   document.addEventListener('click', (e) => {
-    if (!userWrapper.contains(e.target) && dropdown.classList.contains('open')) {
+    if (!headerUser.contains(e.target) && dropdown.classList.contains('open')) {
       dropdown.classList.remove('open');
-      setTimeout(() => {
-        pwdOverlay.classList.remove('active');
-        switcherPwd.value = '';
-      }, 300);
     }
   });
-  
-  // Open password overlay
-  switchProfileBtn.addEventListener('click', (e) => {
+
+  // Logout
+  document.getElementById('logoutBtn').addEventListener('click', (e) => {
     e.stopPropagation();
-    pwdOverlay.classList.add('active');
-    setTimeout(() => switcherPwd.focus(), 300);
-  });
-  
-  // Back button in overlay
-  pwdBackBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    pwdOverlay.classList.remove('active');
-    switcherPwd.value = '';
-  });
-  
-  // Confirm password
-  const confirmSwitch = async () => {
-    if (switcherPwd.value === '123') {
-      setCurrentUser(targetUser);
-      // Aguarda a sincronização imediata antes de recarregar
-      // para garantir que dados recentes cheguem ao Supabase
-      btnConfirmSwitch.disabled = true;
-      btnConfirmSwitch.textContent = 'Entrando...';
-      await flushSync();
-      // Redireciona ao Dashboard antes de recarregar
-      window.location.hash = '#/';
-      window.location.reload();
-    } else {
-      alert('Senha incorreta!');
-      switcherPwd.focus();
-    }
-  };
-  
-  btnConfirmSwitch.addEventListener('click', (e) => {
-    e.stopPropagation();
-    confirmSwitch();
-  });
-  
-  switcherPwd.addEventListener('keyup', (e) => {
-    if (e.key === 'Enter') confirmSwitch();
+    addLog('logout', 'user', loggedUser?.id, `${userName} saiu do sistema`);
+    logoutUser();
+    window.location.hash = '#/';
+    window.location.reload();
   });
 }

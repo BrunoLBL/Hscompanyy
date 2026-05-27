@@ -85,7 +85,12 @@ function renderLogin(container, dentists) {
     const pwd = document.getElementById('portalPassword').value;
 
     if (!dentist) { toast.error('Selecione seu perfil.'); return; }
-    if (pwd !== '123') { toast.error('Senha incorreta.'); return; }
+    
+    // Verifica senha individual do usuário
+    const users = data.settings?.users || [];
+    const user = users.find(u => u.name === dentist);
+    const validPwd = user ? user.password : '123';
+    if (pwd !== validPwd) { toast.error('Senha incorreta.'); return; }
 
     sessionStorage.setItem('dentist_portal_user', dentist);
     toast.success(`Bem-vindo(a), ${dentist}!`);
@@ -135,6 +140,7 @@ function renderPanel(container, dentistName) {
             </div>
             <span class="portal-dentist-name" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dentistName}</span>
           </div>
+          <a href="#/estoque-dentista" class="btn btn-secondary btn-sm">${icon('package', 14)} Estoque</a>
           <button class="btn btn-secondary btn-sm" id="portalLogoutBtn">${icon('logOut', 14)} Sair</button>
         </div>
       </header>
@@ -197,8 +203,8 @@ function renderPanel(container, dentistName) {
 
   container.querySelectorAll('.open-prontuario').forEach(btn => {
     btn.onclick = (e) => {
-      // Abre o prontuário em uma nova aba para não sair do portal
-      window.open('#/prontuario/' + e.currentTarget.dataset.id, '_blank');
+      // Navega para o prontuário reduzido do dentista (sem acesso ao sistema completo)
+      window.location.hash = '#/prontuario-dentista/' + e.currentTarget.dataset.id;
     };
   });
 

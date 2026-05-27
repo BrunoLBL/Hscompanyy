@@ -48,7 +48,7 @@ async function loadFromSupabase() {
 
 // ─── Deep Merge Multi-Usuário ────────────────────────────
 // Coleções que são arrays de objetos com campo 'id'
-const COLLECTIONS = ['patients', 'appointments', 'transactions', 'inventory', 'attendances', 'clinicalRecords', 'treatments', 'photos'];
+const COLLECTIONS = ['patients', 'appointments', 'transactions', 'inventory', 'attendances', 'clinicalRecords', 'treatments', 'photos', 'documents', 'inventoryNotifications', 'systemLogs'];
 
 function getRecordTimestamp(item) {
   const ts = item.updatedAt || item.createdAt || item.date || item.startDate;
@@ -293,6 +293,7 @@ export async function initStore() {
   if (localData) {
     _data = localData;
     normalizeDentists(_data);
+    migrateUsers(_data);
     console.log('⚡ initStore ultra-rápido: renderizando UI imediatamente com dados locais');
 
     // Se houver Supabase, busca atualizações em background sem bloquear a UI
@@ -346,6 +347,7 @@ export async function initStore() {
     if (remoteData) {
       _data = remoteData;
       normalizeDentists(_data);
+      migrateUsers(_data);
       localStorage.setItem(STORE_KEY, JSON.stringify(_data));
       console.log('✅ Dados iniciais carregados do Supabase');
       subscribeRealtime();
@@ -355,6 +357,7 @@ export async function initStore() {
 
   // 3. FALLBACK FINAL: Gera dados demo (sem supabase e sem dados locais)
   _data = seedDemoData();
+  migrateUsers(_data);
   saveAll(_data);
   console.log('Criados dados demo de fallback.');
   subscribeRealtime();
@@ -375,8 +378,77 @@ function normalizeDentists(data) {
   }
 }
 
+// ─── Migração de Usuários ────────────────────────────────
+function migrateUsers(data) {
+  if (!data) return;
+  if (!data.settings) data.settings = {};
+  if (!data.settings.users || data.settings.users.length === 0) {
+    const allPerms = ['dashboard','atendimentos','pacientes','agenda','financeiro','estoque','relatorios','configuracoes','whatsapp','dentistas'];
+    const recepPerms = ['dashboard','atendimentos','pacientes','agenda','estoque','configuracoes','whatsapp','dentistas'];
+    data.settings.users = [
+      { id: generateId(), name: 'Administrador', role: 'admin', password: '123', permissions: allPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: generateId(), name: 'Recepção', role: 'recepcao', password: '123', permissions: recepPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    ];
+    // Cria um usuário para cada dentista cadastrado
+    const dentists = data.settings.dentists || [];
+    dentists.forEach(d => {
+      const exists = data.settings.users.find(u => u.dentistId === d.id);
+      if (!exists) {
+        data.settings.users.push({
+          id: generateId(), name: d.name, role: 'dentista', password: '123',
+          permissions: ['portal'], dentistId: d.id,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+        });
+      }
+    });
+  }
+  // Garante novas coleções
+  if (!data.documents) data.documents = [];
+  if (!data.inventoryNotifications) data.inventoryNotifications = [];
+  if (!data.systemLogs) data.systemLogs = [];
+}
+
+// ─── Sessão de Login ─────────────────────────────────────
+export function getLoggedUser() {
+  try {
+    const raw = sessionStorage.getItem('hscorp_logged_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function setLoggedUser(user) {
+  sessionStorage.setItem('hscorp_logged_user', JSON.stringify(user));
+}
+
+export function logoutUser() {
+  sessionStorage.removeItem('hscorp_logged_user');
+  sessionStorage.removeItem('dentist_portal_user');
+}
+
+export function getUsers() {
+  return getData().settings?.users || [];
+}
+
+export function saveUser(user) {
+  const d = getData();
+  if (!d.settings.users) d.settings.users = [];
+  user.updatedAt = new Date().toISOString();
+  const idx = d.settings.users.findIndex(u => u.id === user.id);
+  if (idx >= 0) d.settings.users[idx] = { ...d.settings.users[idx], ...user };
+  else { user.id = user.id || generateId(); user.createdAt = user.updatedAt; d.settings.users.push(user); }
+  saveAll(d);
+  return user;
+}
+
+export function deleteUser(id) {
+  const d = getData();
+  d.settings.users = (d.settings.users || []).filter(u => u.id !== id);
+  saveAll(d);
+}
+
 export function getCurrentUser() {
-  return localStorage.getItem('hscorp_user') || 'Administrador';
+  const logged = getLoggedUser();
+  return logged ? logged.name : 'Administrador';
 }
 export function setCurrentUser(role) {
   localStorage.setItem('hscorp_user', role);
@@ -388,6 +460,81 @@ export function getData() { if (!_data) initStore(); return _data; }
 export function trackDeletion(data, id) {
   if (!data._deletions) data._deletions = [];
   data._deletions.push({ id, deletedAt: new Date().toISOString() });
+}
+
+// ─── Log do Sistema ──────────────────────────────────────
+export function addLog(action, entity, entityId, description) {
+  const d = getData();
+  if (!d.systemLogs) d.systemLogs = [];
+  const logged = getLoggedUser();
+  d.systemLogs.push({
+    id: generateId(),
+    timestamp: new Date().toISOString(),
+    userId: logged?.id || 'system',
+    userName: logged?.name || 'Sistema',
+    action,   // 'create' | 'update' | 'delete' | 'login' | 'logout' | 'complete'
+    entity,   // 'patient' | 'appointment' | 'transaction' | 'attendance' | 'inventory' | 'user' | ...
+    entityId: entityId || null,
+    description
+  });
+  // Limita a 1000 logs mais recentes para não estourar localStorage
+  if (d.systemLogs.length > 1000) {
+    d.systemLogs = d.systemLogs.slice(-1000);
+  }
+  saveAll(d);
+}
+
+export function getSystemLogs() {
+  return getData().systemLogs || [];
+}
+
+// ─── Documentos do Paciente ──────────────────────────────
+export function getDocuments(patientId) {
+  return (getData().documents || []).filter(doc => doc.patientId === patientId);
+}
+
+export function saveDocument(doc) {
+  const d = getData();
+  if (!d.documents) d.documents = [];
+  doc.updatedAt = new Date().toISOString();
+  const idx = d.documents.findIndex(x => x.id === doc.id);
+  if (idx >= 0) d.documents[idx] = { ...d.documents[idx], ...doc };
+  else { doc.id = doc.id || generateId(); doc.createdAt = doc.updatedAt; d.documents.push(doc); }
+  saveAll(d);
+  return doc;
+}
+
+export function deleteDocument(id) {
+  const d = getData();
+  trackDeletion(d, id);
+  d.documents = (d.documents || []).filter(doc => doc.id !== id);
+  saveAll(d);
+}
+
+// ─── Notificações de Estoque (Dentista → Recepção) ───────
+export function getInventoryNotifications() {
+  return getData().inventoryNotifications || [];
+}
+
+export function saveInventoryNotification(notif) {
+  const d = getData();
+  if (!d.inventoryNotifications) d.inventoryNotifications = [];
+  notif.id = notif.id || generateId();
+  notif.createdAt = new Date().toISOString();
+  notif.status = notif.status || 'pending';
+  d.inventoryNotifications.push(notif);
+  saveAll(d);
+  return notif;
+}
+
+export function dismissInventoryNotification(id) {
+  const d = getData();
+  const idx = (d.inventoryNotifications || []).findIndex(n => n.id === id);
+  if (idx >= 0) {
+    d.inventoryNotifications[idx].status = 'dismissed';
+    d.inventoryNotifications[idx].updatedAt = new Date().toISOString();
+    saveAll(d);
+  }
 }
 
 // ─── Pacientes ───────────────────────────────────────────
@@ -647,7 +794,18 @@ function seedDemoData() {
     { id:'tr4',patientId:'p1',procedure:'Limpeza Semestral',status:'completed',totalSessions:1,completedSessions:1,value:250,paid:250,dentist:'Dra. Helena Souza',startDate:new Date(y,m-2,10).toISOString(),updatedAt:new Date().toISOString() },
   ];
 
-  return { patients, appointments, transactions, inventory, clinicalRecords, treatments, photos: [], odontograms: {}, attendances: [], _deletions: [], settings: { clinicName: 'HS Corp', dentists } };
+  const allPerms = ['dashboard','atendimentos','pacientes','agenda','financeiro','estoque','relatorios','configuracoes','whatsapp','dentistas'];
+  const recepPerms = ['dashboard','atendimentos','pacientes','agenda','estoque','configuracoes','whatsapp','dentistas'];
+  const defaultUsers = [
+    { id: generateId(), name: 'Administrador', role: 'admin', password: '123', permissions: allPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: generateId(), name: 'Recepção', role: 'recepcao', password: '123', permissions: recepPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ];
+  // User para cada dentista
+  dentists.forEach(d => {
+    defaultUsers.push({ id: generateId(), name: d.name, role: 'dentista', password: '123', permissions: ['portal'], dentistId: d.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  });
+
+  return { patients, appointments, transactions, inventory, clinicalRecords, treatments, photos: [], documents: [], odontograms: {}, attendances: [], inventoryNotifications: [], systemLogs: [], _deletions: [], settings: { clinicName: 'HS Corp', dentists, users: defaultUsers } };
 }
 
 export function exportData() {
@@ -668,6 +826,8 @@ export function importData(jsonStr) {
 }
 
 export function resetStore() {
+  const allPerms = ['dashboard','atendimentos','pacientes','agenda','financeiro','estoque','relatorios','configuracoes','whatsapp','dentistas'];
+  const recepPerms = ['dashboard','atendimentos','pacientes','agenda','estoque','configuracoes','whatsapp','dentistas'];
   const emptyData = {
     patients: [],
     appointments: [],
@@ -676,10 +836,20 @@ export function resetStore() {
     clinicalRecords: [],
     treatments: [],
     photos: [],
+    documents: [],
     odontograms: {},
     attendances: [],
+    inventoryNotifications: [],
+    systemLogs: [],
     _deletions: [],
-    settings: { clinicName: 'HS Corp', dentists: [] }
+    settings: {
+      clinicName: 'HS Corp',
+      dentists: [],
+      users: [
+        { id: generateId(), name: 'Administrador', role: 'admin', password: '123', permissions: allPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: generateId(), name: 'Recepção', role: 'recepcao', password: '123', permissions: recepPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      ]
+    }
   };
   _data = emptyData;
   saveAll(emptyData);

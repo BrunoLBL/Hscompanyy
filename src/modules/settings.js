@@ -1,13 +1,14 @@
 import { icon } from '../utils/icons.js';
-import { getData, exportData, importData, resetStore, getCurrentUser, forceSync, lastSyncTime, syncStatus, saveAll, trackDeletion, flushSync } from '../modules/store.js';
+import { getData, exportData, importData, resetStore, getCurrentUser, forceSync, lastSyncTime, syncStatus, saveAll, trackDeletion, flushSync, getLoggedUser, getUsers, saveUser, deleteUser, getSystemLogs, addLog } from '../modules/store.js';
 import { generateId } from '../utils/helpers.js';
 import { toast } from '../components/toast.js';
+import { openModal, closeAllModals } from '../components/modal.js';
 
 export function renderSettings(container) {
   const data = getData();
   const settings = data.settings || {};
-  const currentUser = getCurrentUser();
-  const isAdmin = currentUser === 'Administrador';
+  const loggedUser = getLoggedUser();
+  const isAdmin = loggedUser?.role === 'admin';
 
   const syncTimeStr = lastSyncTime 
     ? new Date(lastSyncTime).toLocaleString('pt-BR') 
@@ -85,11 +86,28 @@ export function renderSettings(container) {
       </div>
     </div>
 
+    ${isAdmin ? `
+    <!-- Gerenciar Usuários -->
+    <div class="card" style="margin-top:20px">
+      <h4 style="font-weight:600;margin-bottom:16px">👥 Gerenciar Usuários e Permissões</h4>
+      <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:16px">Gerencie as credenciais e permissões de acesso de cada usuário do sistema.</p>
+      <div id="usersList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;"></div>
+      <button class="btn btn-primary btn-sm" id="addUserBtn">${icon('plus', 14)} Adicionar Usuário</button>
+    </div>
+
+    <!-- Log do Sistema -->
+    <div class="card" style="margin-top:20px">
+      <h4 style="font-weight:600;margin-bottom:16px">📝 Log do Sistema</h4>
+      <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:16px">Histórico de alterações realizadas por cada usuário.</p>
+      <button class="btn btn-secondary btn-sm" id="viewLogsBtn">${icon('list', 14)} Ver Log Completo</button>
+    </div>
+    ` : ''}
+
     <div class="card" style="margin-top:20px">
       <h4 style="font-weight:600;margin-bottom:12px">Sobre o Sistema</h4>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:.85rem">
         <div><span style="color:var(--text-muted)">Sistema:</span> HS Corp — Gestão Odontológica</div>
-        <div><span style="color:var(--text-muted)">Versão:</span> 1.0.0</div>
+        <div><span style="color:var(--text-muted)">Versão:</span> 2.0.0</div>
         <div><span style="color:var(--text-muted)">Pacientes:</span> ${data.patients?.length||0}</div>
         <div><span style="color:var(--text-muted)">Agendamentos:</span> ${data.appointments?.length||0}</div>
         <div><span style="color:var(--text-muted)">Transações:</span> ${data.transactions?.length||0}</div>
@@ -207,6 +225,7 @@ export function renderSettings(container) {
       data.settings.clinicName = document.getElementById('clinicName').value;
     }
     saveAll(data);
+    addLog('update', 'settings', null, 'Configurações da clínica atualizadas');
     toast.success('Configurações salvas!');
   };
 
@@ -219,7 +238,7 @@ export function renderSettings(container) {
     const result = await forceSync();
     
     if (result.success) {
-      toast.success(`Dados sincronizados com sucesso! (${result.size})`);
+      toast.success(`Dados sincronizados com sucesso!`);
       btn.textContent = '✅ Sincronizado!';
     } else {
       toast.error('Erro ao sincronizar: ' + result.error);
@@ -261,10 +280,227 @@ export function renderSettings(container) {
         setTimeout(() => location.reload(), 500);
       }
     };
+
+    // ─── Gerenciar Usuários ─────────────────────────────────────────────
+    renderUsersList();
+    
+    document.getElementById('addUserBtn').addEventListener('click', () => openUserForm());
+
+    // ─── Log do Sistema ─────────────────────────────────────────────────
+    document.getElementById('viewLogsBtn').addEventListener('click', () => openLogsModal());
   }
 
   // ─── Carregar lista de backups ──────────────────────────────────────
   loadBackupsList();
+}
+
+// ─── Render Users List ─────────────────────────────────────────────
+function renderUsersList() {
+  const listEl = document.getElementById('usersList');
+  if (!listEl) return;
+  
+  const users = getUsers();
+  const allPerms = ['dashboard','atendimentos','pacientes','agenda','financeiro','estoque','relatorios','configuracoes','whatsapp','dentistas'];
+  const permLabels = {
+    dashboard: 'Dashboard', atendimentos: 'Atendimentos', pacientes: 'Pacientes',
+    agenda: 'Agenda', financeiro: 'Financeiro', estoque: 'Estoque',
+    relatorios: 'Relatórios', configuracoes: 'Configurações', whatsapp: 'WhatsApp', dentistas: 'Dentistas'
+  };
+
+  listEl.innerHTML = users.map(u => {
+    const roleBadge = u.role === 'admin' ? '<span style="background:#6366f1;color:#fff;padding:2px 8px;border-radius:10px;font-size:.7rem;">Admin</span>'
+      : u.role === 'recepcao' ? '<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:10px;font-size:.7rem;">Recepção</span>'
+      : '<span style="background:#10b981;color:#fff;padding:2px 8px;border-radius:10px;font-size:.7rem;">Dentista</span>';
+    
+    const permStr = (u.permissions || []).filter(p => p !== 'portal').map(p => permLabels[p] || p).join(', ') || (u.role === 'dentista' ? 'Portal do Dentista' : '-');
+    
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg-lighter);border:1px solid var(--border);border-radius:var(--radius-sm);">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0;">
+          ${u.name.charAt(0).toUpperCase()}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+            ${u.name} ${roleBadge}
+          </div>
+          <div style="font-size:.75rem;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${permStr}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary btn-sm edit-user-btn" data-id="${u.id}" title="Editar">${icon('edit', 14)}</button>
+          ${u.role !== 'admin' ? `<button class="btn btn-danger btn-sm del-user-btn" data-id="${u.id}" title="Excluir">${icon('trash', 14)}</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('.edit-user-btn').forEach(btn => {
+    btn.onclick = () => {
+      const user = users.find(u => u.id === btn.dataset.id);
+      if (user) openUserForm(user);
+    };
+  });
+
+  listEl.querySelectorAll('.del-user-btn').forEach(btn => {
+    btn.onclick = () => {
+      if (confirm('Excluir este usuário?')) {
+        deleteUser(btn.dataset.id);
+        addLog('delete', 'user', btn.dataset.id, 'Usuário excluído');
+        toast.success('Usuário excluído');
+        renderUsersList();
+      }
+    };
+  });
+}
+
+function openUserForm(user = null) {
+  const isEdit = !!user;
+  const allPerms = ['dashboard','atendimentos','pacientes','agenda','financeiro','estoque','relatorios','configuracoes','whatsapp','dentistas'];
+  const permLabels = {
+    dashboard: 'Dashboard', atendimentos: 'Atendimentos', pacientes: 'Pacientes',
+    agenda: 'Agenda', financeiro: 'Financeiro', estoque: 'Estoque',
+    relatorios: 'Relatórios', configuracoes: 'Configurações', whatsapp: 'WhatsApp', dentistas: 'Dentistas'
+  };
+  const data = getData();
+  const dentists = data.settings?.dentists || [];
+
+  const u = user || { name: '', role: 'recepcao', password: '', permissions: ['dashboard','atendimentos','pacientes','agenda','estoque','configuracoes','whatsapp','dentistas'], dentistId: null };
+
+  const modal = openModal({
+    title: isEdit ? `Editar Usuário: ${u.name}` : 'Novo Usuário',
+    size: 'lg',
+    content: `
+      <div class="form-row">
+        <div class="form-group"><label>Nome *</label><input type="text" id="userName" value="${u.name}" /></div>
+        <div class="form-group"><label>Tipo</label>
+          <select id="userRole">
+            <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
+            <option value="recepcao" ${u.role==='recepcao'?'selected':''}>Recepção</option>
+            <option value="dentista" ${u.role==='dentista'?'selected':''}>Dentista</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>${isEdit ? 'Nova Senha (deixe em branco para manter)' : 'Senha *'}</label><input type="text" id="userPassword" value="${isEdit ? '' : u.password}" placeholder="${isEdit ? 'Manter atual' : 'Digite a senha'}" /></div>
+        <div class="form-group" id="dentistLinkGroup" style="display:${u.role==='dentista'?'block':'none'};">
+          <label>Vincular ao Dentista</label>
+          <select id="userDentistId">
+            <option value="">Nenhum</option>
+            ${dentists.map(d => `<option value="${d.id}" ${u.dentistId===d.id?'selected':''}>${d.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="permsGroup" style="display:${u.role==='dentista'?'none':'block'};">
+        <label>Permissões de Acesso</label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:8px;">
+          ${allPerms.map(p => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer;padding:6px 10px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);">
+              <input type="checkbox" class="perm-check" value="${p}" ${(u.permissions||[]).includes(p)?'checked':''} />
+              ${permLabels[p]}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+    `,
+    footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
+      <button class="btn btn-primary" id="saveUserBtn">${isEdit ? 'Salvar Alterações' : 'Cadastrar'}</button>`
+  });
+
+  // Toggle dentist/perms visibility
+  modal.querySelector('#userRole').onchange = (e) => {
+    const isDentist = e.target.value === 'dentista';
+    modal.querySelector('#dentistLinkGroup').style.display = isDentist ? 'block' : 'none';
+    modal.querySelector('#permsGroup').style.display = isDentist ? 'none' : 'block';
+  };
+
+  modal.querySelector('#saveUserBtn').onclick = () => {
+    const name = modal.querySelector('#userName').value.trim();
+    const role = modal.querySelector('#userRole').value;
+    const password = modal.querySelector('#userPassword').value;
+    const dentistId = modal.querySelector('#userDentistId')?.value || null;
+
+    if (!name) { toast.error('Nome é obrigatório'); return; }
+    if (!isEdit && !password) { toast.error('Senha é obrigatória'); return; }
+    
+    if (role === 'dentista' && !dentistId) {
+      toast.error('É obrigatório vincular a um dentista cadastrado');
+      return;
+    }
+
+    let permissions;
+    if (role === 'dentista') {
+      permissions = ['portal'];
+    } else if (role === 'admin') {
+      permissions = [...allPerms];
+    } else {
+      permissions = Array.from(modal.querySelectorAll('.perm-check:checked')).map(cb => cb.value);
+    }
+
+    const userData = {
+      ...u,
+      name,
+      role,
+      permissions,
+      dentistId: role === 'dentista' ? dentistId : null
+    };
+    if (password) userData.password = password;
+
+    saveUser(userData);
+    addLog(isEdit ? 'update' : 'create', 'user', userData.id, `${isEdit ? 'Editou' : 'Criou'} usuário: ${name}`);
+    closeAllModals();
+    toast.success(isEdit ? 'Usuário atualizado!' : 'Usuário cadastrado!');
+    renderUsersList();
+  };
+}
+
+// ─── Log Modal ─────────────────────────────────────────────
+function openLogsModal() {
+  const logs = getSystemLogs().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  const actionLabels = {
+    create: '➕ Criou', update: '✏️ Editou', delete: '🗑️ Excluiu',
+    login: '🔑 Login', logout: '🚪 Logout', complete: '✅ Concluiu'
+  };
+  const entityLabels = {
+    patient: 'Paciente', appointment: 'Agendamento', transaction: 'Transação',
+    attendance: 'Atendimento', inventory: 'Estoque', user: 'Usuário',
+    settings: 'Configurações', notification: 'Notificação', document: 'Documento'
+  };
+
+  openModal({
+    title: '📝 Log do Sistema',
+    size: 'lg',
+    content: `
+      <div style="max-height:500px;overflow-y:auto;">
+        ${logs.length === 0 ? '<p style="text-align:center;color:var(--text-muted);padding:20px;">Nenhum registro no log.</p>' : `
+        <table class="data-table" style="font-size:.82rem;">
+          <thead style="position:sticky;top:0;z-index:1;">
+            <tr>
+              <th>Data/Hora</th>
+              <th>Usuário</th>
+              <th>Ação</th>
+              <th>Entidade</th>
+              <th>Descrição</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${logs.slice(0, 200).map(l => `
+              <tr>
+                <td style="white-space:nowrap;">${new Date(l.timestamp).toLocaleString('pt-BR')}</td>
+                <td style="font-weight:500;">${l.userName}</td>
+                <td>${actionLabels[l.action] || l.action}</td>
+                <td>${entityLabels[l.entity] || l.entity}</td>
+                <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${l.description}">${l.description}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        `}
+      </div>
+    `,
+    footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Fechar</button>`
+  });
 }
 
 async function loadBackupsList() {

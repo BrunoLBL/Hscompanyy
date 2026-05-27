@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatCurrency, formatDate } from '../utils/helpers.js';
-import { getInventory, saveInventoryItem, deleteInventoryItem } from '../modules/store.js';
+import { getInventory, saveInventoryItem, deleteInventoryItem, getInventoryNotifications, dismissInventoryNotification } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
@@ -18,6 +18,25 @@ export function renderInventory(container) {
       <div><h2>Estoque</h2><p>${inventory.length} itens cadastrados</p></div>
       <button class="btn btn-primary" id="addItemBtn">${icon('plus',16)} Novo Item</button>
     </div>
+
+    ${(() => {
+      const notifs = getInventoryNotifications().filter(n => n.status === 'pending');
+      if (notifs.length === 0) return '';
+      return `<div class="card" style="margin-bottom:20px;border-left:4px solid var(--accent-warn);">
+        <h4 style="color:var(--accent-warn);font-size:.9rem;margin-bottom:12px;">🔔 Notificações dos Dentistas (${notifs.length})</h4>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${notifs.map(n => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(245,166,35,.06);border-radius:8px;">
+              <div>
+                <div style="font-weight:600;font-size:.85rem;">${n.message}</div>
+                <div style="font-size:.75rem;color:var(--text-muted);">${new Date(n.createdAt).toLocaleString('pt-BR')}</div>
+              </div>
+              <button class="btn btn-secondary btn-sm dismiss-notif" data-id="${n.id}">Dispensar</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+    })()}
 
     ${lowStock.length > 0 ? `<div class="card" style="margin-bottom:20px;border-left:4px solid var(--accent-danger)">
       <h4 style="color:var(--accent-danger);font-size:.9rem;margin-bottom:8px">${icon('alertCircle',16)} Estoque Baixo (${lowStock.length} itens)</h4>
@@ -59,6 +78,11 @@ export function renderInventory(container) {
   });
   container.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     if (confirm('Excluir item?')) { deleteInventoryItem(b.dataset.del); toast.success('Item excluído'); renderInventory(container); }
+  });
+  container.querySelectorAll('.dismiss-notif').forEach(b => b.onclick = () => {
+    dismissInventoryNotification(b.dataset.id);
+    toast.success('Notificação dispensada');
+    renderInventory(container);
   });
 }
 

@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatCurrency, formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge } from '../utils/helpers.js';
-import { getPatient, getClinicalRecords, saveClinicalRecord, getPhotos, savePhoto, deletePhoto, getTreatments, saveTreatment, getAppointments, getTransactions, getOdontogram, saveOdontogram } from '../modules/store.js';
+import { getPatient, getClinicalRecords, saveClinicalRecord, getPhotos, savePhoto, deletePhoto, getTreatments, saveTreatment, getAppointments, getTransactions, getOdontogram, saveOdontogram, getDocuments, saveDocument, deleteDocument, getData } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -17,8 +17,9 @@ export function renderPatientRecord(container, patientId) {
   const treatments = getTreatments(patientId);
   const appointments = getAppointments().filter(a => a.patientId === patientId);
   const transactions = getTransactions().filter(t => t.patientId === patientId);
-  const totalPaid = transactions.filter(t => t.type === 'income' && t.status === 'paid').reduce((s, t) => s + t.amount, 0);
-  const totalPending = transactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((s, t) => s + t.amount, 0);
+  const totalPaid = transactions.filter(t => t.type === 'income' && t.status === 'paid').reduce((s, t) => s + (Number(t.amount)||0), 0);
+  const totalPending = transactions.filter(t => t.type === 'income' && t.status === 'pending').reduce((s, t) => s + (Number(t.amount)||0), 0);
+  const documents = getDocuments(patientId);
 
   container.innerHTML = `
     <div style="margin-bottom:20px">
@@ -51,6 +52,7 @@ export function renderPatientRecord(container, patientId) {
       <button class="tab-btn ${currentTab==='historico'?'active':''}" data-tab="historico">Histórico Clínico</button>
       <button class="tab-btn ${currentTab==='odontograma'?'active':''}" data-tab="odontograma">Odontograma</button>
       <button class="tab-btn ${currentTab==='fotos'?'active':''}" data-tab="fotos">Fotos (${photos.length})</button>
+      <button class="tab-btn ${currentTab==='documentos'?'active':''}" data-tab="documentos">Documentos (${documents.length})</button>
       <button class="tab-btn ${currentTab==='tratamentos'?'active':''}" data-tab="tratamentos">Tratamentos</button>
       <button class="tab-btn ${currentTab==='financeiro'?'active':''}" data-tab="financeiro">Financeiro</button>
       <button class="tab-btn ${currentTab==='agendamentos'?'active':''}" data-tab="agendamentos">Agendamentos</button>
@@ -77,6 +79,7 @@ export function renderPatientRecord(container, patientId) {
       case 'historico': renderHistorico(tc, patientId, records); break;
       case 'odontograma': renderOdontogramTab(tc, patientId); break;
       case 'fotos': renderFotos(tc, patientId, photos); break;
+      case 'documentos': renderDocumentos(tc, patientId, documents); break;
       case 'tratamentos': renderTratamentos(tc, patientId, treatments); break;
       case 'financeiro': renderFinanceiro(tc, transactions, totalPaid, totalPending); break;
       case 'agendamentos': renderAgendamentos(tc, appointments); break;
@@ -321,4 +324,146 @@ function renderAgendamentos(tc, appointments) {
       <td><span class="status-badge status-${a.status}">${a.status==='confirmed'?'Confirmado':a.status==='completed'?'Concluído':a.status==='cancelled'?'Cancelado':'Pendente'}</span></td></tr>
     `).join('')}</tbody></table>`}
   </div>`;
+}
+
+function renderDocumentos(tc, patientId, documents) {
+  const docTypes = ['RG', 'CPF', 'Contrato', 'Receita', 'Atestado', 'Laudo', 'Radiografia', 'Termo de Consentimento', 'Outro'];
+  
+  // Agrupa documentos por tipo
+  const grouped = {};
+  documents.forEach(doc => {
+    const type = doc.type || 'Outro';
+    if (!grouped[type]) grouped[type] = [];
+    grouped[type].push(doc);
+  });
+
+  tc.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+      <button class="btn btn-primary btn-sm" id="addDocBtn">${icon('plus',14)} Adicionar Documento</button>
+      <input type="file" id="docFileInput" accept="image/*,.pdf" style="display:none"/>
+    </div>
+    ${documents.length === 0 ? `
+      <div class="card">
+        <div class="empty-state">
+          <h3>Nenhum documento</h3>
+          <p>Adicione documentos como RG, CPF, contratos, receitas, laudos, etc.</p>
+        </div>
+      </div>
+    ` : `
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        ${Object.entries(grouped).map(([type, docs]) => `
+          <div class="card">
+            <h4 style="font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;color:var(--primary);">
+              ${icon('fileText', 16)} ${type}
+              <span style="font-size:.75rem;background:var(--primary-bg);padding:2px 8px;border-radius:10px;font-weight:500;">${docs.length}</span>
+            </h4>
+            <div class="doc-grid">
+              ${docs.map(doc => {
+                const isPdf = doc.mimeType === 'application/pdf';
+                return `
+                  <div class="doc-card">
+                    <div class="doc-card-preview" data-view="${doc.id}">
+                      ${isPdf ? `
+                        <div class="doc-pdf-icon">
+                          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          <span>PDF</span>
+                        </div>
+                      ` : `
+                        <img src="${doc.data}" alt="${doc.name}" style="width:100%;height:100%;object-fit:cover;"/>
+                      `}
+                    </div>
+                    <div class="doc-card-info">
+                      <span class="doc-card-name" title="${doc.name}">${doc.name}</span>
+                      <span class="doc-card-date">${formatDate(doc.createdAt)}</span>
+                    </div>
+                    <div class="doc-card-actions">
+                      <button class="btn btn-icon btn-secondary btn-sm doc-view-btn" data-id="${doc.id}" title="Visualizar">${icon('eye', 14)}</button>
+                      <button class="btn btn-icon btn-danger btn-sm doc-del-btn" data-id="${doc.id}" title="Excluir">${icon('trash', 14)}</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `}
+  `;
+
+  // Adicionar documento
+  let selectedDocType = 'Outro';
+  document.getElementById('addDocBtn')?.addEventListener('click', () => {
+    const modal = openModal({
+      title: 'Adicionar Documento',
+      content: `
+        <div class="form-group" style="margin-bottom:16px;">
+          <label>Tipo de Documento</label>
+          <select id="docType" class="input">
+            ${docTypes.map(t => `<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Arquivo (PDF ou Imagem)</label>
+          <input type="file" id="docFileModal" accept="image/*,.pdf" class="input" />
+        </div>
+      `,
+      footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
+        <button class="btn btn-primary" id="saveDocBtn">Salvar</button>`
+    });
+
+    modal.querySelector('#saveDocBtn').onclick = () => {
+      const file = modal.querySelector('#docFileModal').files[0];
+      const docType = modal.querySelector('#docType').value;
+      if (!file) { toast.error('Selecione um arquivo'); return; }
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        saveDocument({
+          patientId,
+          type: docType,
+          name: file.name,
+          data: ev.target.result,
+          mimeType: file.type
+        });
+        closeAllModals();
+        toast.success('Documento adicionado!');
+        renderDocumentos(tc, patientId, getDocuments(patientId));
+      };
+      reader.readAsDataURL(file);
+    };
+  });
+
+  // Visualizar documento
+  tc.querySelectorAll('.doc-view-btn, [data-view]').forEach(el => {
+    el.onclick = (e) => {
+      const docId = e.currentTarget.dataset.id || e.currentTarget.dataset.view;
+      const doc = documents.find(d => d.id === docId);
+      if (!doc) return;
+      
+      if (doc.mimeType === 'application/pdf') {
+        // Abre PDF em nova aba
+        const win = window.open();
+        win.document.write(`<iframe src="${doc.data}" style="width:100%;height:100%;border:none;" frameborder="0"></iframe>`);
+      } else {
+        // Abre imagem em modal fullscreen
+        openModal({
+          title: doc.name,
+          size: 'lg',
+          content: `<div style="text-align:center;"><img src="${doc.data}" style="max-width:100%;max-height:70vh;border-radius:8px;"/></div>`,
+          footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Fechar</button>`
+        });
+      }
+    };
+  });
+
+  // Excluir documento
+  tc.querySelectorAll('.doc-del-btn').forEach(btn => {
+    btn.onclick = () => {
+      if (confirm('Excluir este documento?')) {
+        deleteDocument(btn.dataset.id);
+        toast.success('Documento excluído!');
+        renderDocumentos(tc, patientId, getDocuments(patientId));
+      }
+    };
+  });
 }
