@@ -9,3 +9,20 @@ export function getInitials(name){if(!name)return'?';return name.split(' ').filt
 export function daysBetween(a,b){return Math.floor((new Date(b)-new Date(a))/(1e3*60*60*24))}
 export function isToday(d){const t=new Date(),dt=new Date(d);return t.toDateString()===dt.toDateString()}
 export function getAge(birth){if(!birth)return'';const b=new Date(birth),t=new Date();let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a}
+
+export function escapeHTML(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export async function hashPassword(password) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}

@@ -1,5 +1,6 @@
-import { getUsers, setLoggedUser, addLog } from './store.js';
+import { getUsers, setLoggedUser, addLog, getData } from './store.js';
 import { toast } from '../components/toast.js';
+import { hashPassword } from '../utils/helpers.js';
 
 export function renderLogin(onLoginSuccess) {
   const app = document.getElementById('app');
@@ -94,7 +95,7 @@ export function renderLogin(onLoginSuccess) {
   // Login
   document.getElementById('loginBtn').addEventListener('click', doLogin);
 
-  function doLogin() {
+  async function doLogin() {
     const userId = document.getElementById('loginUser').value;
     const password = document.getElementById('loginPassword').value;
 
@@ -113,7 +114,9 @@ export function renderLogin(onLoginSuccess) {
       return;
     }
 
-    if (user.password !== password) {
+    const hashedInput = await hashPassword(password);
+
+    if (user.password !== password && user.password !== hashedInput) {
       toast.error('Senha incorreta!');
       document.getElementById('loginPassword').value = '';
       document.getElementById('loginPassword').focus();
@@ -126,7 +129,7 @@ export function renderLogin(onLoginSuccess) {
 
     // Se for dentista, seta o portal
     if (user.role === 'dentista') {
-      const dentists = (window.__hsData?.settings?.dentists || []);
+      const dentists = (getData()?.settings?.dentists || []);
       const linkedDentist = dentists.find(d => d.id === user.dentistId);
       if (linkedDentist) {
         sessionStorage.setItem('dentist_portal_user', linkedDentist.name);

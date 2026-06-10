@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate } from '../utils/helpers.js';
+import { formatCurrency, formatDate, escapeHTML } from '../utils/helpers.js';
 import { getTransactions, saveTransaction, deleteTransaction, getPatients } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -86,9 +86,9 @@ export function renderFinancial(container) {
       <tbody>${pageData.map(t=>`
         <tr>
           <td>${formatDate(t.date)}</td>
-          <td style="font-weight:500">${t.description}</td>
-          <td><span style="font-size:.78rem">${t.category||'-'}</span></td>
-          <td>${t.patientName?`<span style="cursor:pointer;color:var(--primary)" onclick="location.hash='#/prontuario/${t.patientId}'">${t.patientName}</span>`:'-'}</td>
+          <td style="font-weight:500">${escapeHTML(t.description)}</td>
+          <td><span style="font-size:.78rem">${escapeHTML(t.category||'-')}</span></td>
+          <td>${t.patientName?`<span style="cursor:pointer;color:var(--primary)" onclick="location.hash='#/prontuario/${t.patientId}'">${escapeHTML(t.patientName)}</span>`:'-'}</td>
           <td style="font-size:.82rem">${t.method||'-'}</td>
           <td style="font-weight:700;color:${t.type==='income'?'var(--accent)':'var(--accent-danger)'}">${t.type==='income'?'+':'−'} ${formatCurrency(t.amount)}</td>
           <td><span class="status-badge status-${t.status==='paid'?'completed':'pending'}">${t.status==='paid'?'Pago':'Pendente'}</span></td>
@@ -184,7 +184,7 @@ function openTransactionForm(type, parentContainer) {
         <div class="form-group"><label>Forma de Pagamento</label>
           <select id="txMethod">${methods.map(m => `<option>${m}</option>`).join('')}</select></div>
         ${type === 'income' ? `<div class="form-group"><label>Paciente</label>
-          <select id="txPatient"><option value="">Nenhum</option>${patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select></div>` : '<div></div>'}
+          <select id="txPatient"><option value="">Nenhum</option>${patients.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}</select></div>` : '<div></div>'}
       </div>
       <div class="form-group"><label>Status</label>
         <select id="txStatus"><option value="paid">Pago</option><option value="pending">Pendente</option></select></div>

@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, isToday, generateId } from '../utils/helpers.js';
+import { formatDate, isToday, generateId, escapeHTML } from '../utils/helpers.js';
 import { getAppointments, saveAppointment, deleteAppointment, getPatients, getData, completeAppointmentProcess } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -100,8 +100,8 @@ function renderMonthView(calView, appointments, y, m, parentContainer) {
         const photoHtml = (dentistObj && dentistObj.photo) 
           ? `<img src="${dentistObj.photo}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;">` 
           : '';
-        return `<div class="cal-event ${a.status}" data-id="${a.id}" title="${a.time} - ${a.patientName}: ${a.procedure}">
-          <div style="display:flex;align-items:center;">${photoHtml}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.time} ${a.patientName.split(' ')[0]}</span></div>
+        return `<div class="cal-event ${a.status}" data-id="${a.id}" title="${a.time} - ${escapeHTML(a.patientName)}: ${escapeHTML(a.procedure)}">
+          <div style="display:flex;align-items:center;">${photoHtml}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.time} ${escapeHTML(a.patientName).split(' ')[0]}</span></div>
         </div>`;
       }).join('')}
       ${dayAppts.length > 3 ? `<div class="cal-more-btn" data-date="${dateStr}" style="font-size:.65rem;color:var(--text-muted);padding:2px 6px;margin-top:2px;cursor:pointer;background:var(--bg-lighter);border-radius:var(--radius-sm);text-align:center;" title="Ver todos os agendamentos deste dia">+${dayAppts.length - 3} mais</div>` : ''}
@@ -176,7 +176,7 @@ function renderWeekView(calView, appointments, parentContainer) {
                     ? `<img src="${dentistObj.photo}" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;">` 
                     : '';
                   return `<div class="cal-event ${a.status}" data-id="${a.id}" style="margin-bottom:2px;display:flex;align-items:center;">
-                    ${photoHtml}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.time} ${a.patientName.split(' ')[0]}</span>
+                    ${photoHtml}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${a.time} ${escapeHTML(a.patientName).split(' ')[0]}</span>
                   </div>`;
                 }).join('')}
               </td>`;
@@ -203,11 +203,11 @@ function openApptDetail(appt, parentContainer) {
     title: 'Detalhes da Consulta',
     content: `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div><label style="font-size:.75rem;color:var(--text-muted)">Paciente</label><p style="font-weight:600">${appt.patientName}</p></div>
-        <div><label style="font-size:.75rem;color:var(--text-muted)">Procedimento</label><p style="font-weight:600">${appt.procedure}</p></div>
+        <div><label style="font-size:.75rem;color:var(--text-muted)">Paciente</label><p style="font-weight:600">${escapeHTML(appt.patientName)}</p></div>
+        <div><label style="font-size:.75rem;color:var(--text-muted)">Procedimento</label><p style="font-weight:600">${escapeHTML(appt.procedure)}</p></div>
         <div><label style="font-size:.75rem;color:var(--text-muted)">Data</label><p>${formatDate(appt.date)}</p></div>
         <div><label style="font-size:.75rem;color:var(--text-muted)">Horário</label><p>${appt.time} (${appt.duration}min)</p></div>
-        <div><label style="font-size:.75rem;color:var(--text-muted)">Dentista</label><p>${appt.dentist}</p></div>
+        <div><label style="font-size:.75rem;color:var(--text-muted)">Dentista</label><p>${escapeHTML(appt.dentist)}</p></div>
         <div><label style="font-size:.75rem;color:var(--text-muted)">Valor</label><p>R$ ${Number(appt.value || 0).toFixed(2).replace('.', ',')}</p></div>
         <div><label style="font-size:.75rem;color:var(--text-muted)">Status</label><p><span class="status-badge status-${appt.status}">${statusLabels[appt.status]}</span></p></div>
       </div>`,
@@ -314,9 +314,9 @@ function openDayAppointmentsModal(dateStr, dayAppts, parentContainer) {
             <div class="card day-appt-card" data-id="${a.id}" style="padding:12px;cursor:pointer;border:1px solid var(--border);border-left:4px solid ${a.status === 'confirmed' ? 'var(--accent)' : a.status === 'completed' ? 'var(--accent-success)' : a.status === 'cancelled' ? 'var(--accent-danger)' : 'var(--accent-warn)'};transition:background 0.2s;">
               <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                  <h4 style="font-weight:600;margin-bottom:6px;font-size:1.05rem;">${a.time} - ${a.patientName}</h4>
+                  <h4 style="font-weight:600;margin-bottom:6px;font-size:1.05rem;">${a.time} - ${escapeHTML(a.patientName)}</h4>
                   <div style="display:flex;align-items:center;font-size:.85rem;color:var(--text-muted);">
-                    ${photoHtml} ${a.procedure} · <span style="margin-left:4px;font-weight:500;">${a.dentist}</span>
+                    ${photoHtml} ${escapeHTML(a.procedure)} · <span style="margin-left:4px;font-weight:500;">${escapeHTML(a.dentist)}</span>
                   </div>
                 </div>
                 <span class="status-badge status-${a.status}">${a.status === 'confirmed' ? 'Confirmado' : a.status === 'completed' ? 'Concluído' : a.status === 'cancelled' ? 'Cancelado' : 'Pendente'}</span>

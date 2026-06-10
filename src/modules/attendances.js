@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate } from '../utils/helpers.js';
+import { formatDate, escapeHTML } from '../utils/helpers.js';
 import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -23,13 +23,13 @@ export function renderAttendances(container) {
       ` : attendances.map(a => `
         <div class="card" style="display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <h3 style="font-size:1.1rem; font-weight:700;">${a.patientName}</h3>
+            <h3 style="font-size:1.1rem; font-weight:700;">${escapeHTML(a.patientName)}</h3>
             <span class="status-badge status-pending" style="font-size:0.7rem;">Em Andamento</span>
           </div>
           <div style="font-size:0.85rem; color:var(--text-muted); display:flex; flex-direction:column; gap:6px;">
             <div style="display:flex; align-items:center; gap:6px;">${icon('clock', 14)} Iniciado às ${new Date(a.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-            <div style="display:flex; align-items:center; gap:6px;">${icon('user', 14)} ${a.dentist || 'Recepção'}</div>
-            <div style="display:flex; align-items:center; gap:6px;">${icon('fileText', 14)} ${a.procedure}</div>
+            <div style="display:flex; align-items:center; gap:6px;">${icon('user', 14)} ${escapeHTML(a.dentist || 'Recepção')}</div>
+            <div style="display:flex; align-items:center; gap:6px;">${icon('fileText', 14)} ${escapeHTML(a.procedure)}</div>
             <div style="display:flex; align-items:center; gap:6px;">${icon('dollar', 14)} R$ ${Number(a.value).toFixed(2).replace('.', ',')}</div>
           </div>
           <div style="margin-top:auto; display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border-color);">
@@ -72,8 +72,8 @@ function openNewAttendanceModal(parentContainer) {
               <div class="card" style="padding:12px;cursor:pointer;border:1px solid var(--border);" onclick="startScheduledAppt('${a.id}')">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
                   <div>
-                    <h4 style="font-weight:600;margin-bottom:4px;">${a.time} - ${a.patientName}</h4>
-                    <div style="font-size:.8rem;color:var(--text-muted);">${a.procedure} · ${a.dentist}</div>
+                    <h4 style="font-weight:600;margin-bottom:4px;">${a.time} - ${escapeHTML(a.patientName)}</h4>
+                    <div style="font-size:.8rem;color:var(--text-muted);">${escapeHTML(a.procedure)} · ${escapeHTML(a.dentist)}</div>
                   </div>
                   <button class="btn btn-primary btn-sm">Iniciar</button>
                 </div>
@@ -89,7 +89,7 @@ function openNewAttendanceModal(parentContainer) {
           <div style="display:flex; gap:8px;">
             <select id="attPatient" style="flex:1;">
               <option value="">Selecione um paciente cadastrado...</option>
-              ${patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+              ${patients.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}
             </select>
             <button class="btn btn-secondary" id="registerNewPatientBtn" type="button">${icon('plus', 16)} Cadastrar</button>
           </div>

@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge } from '../utils/helpers.js';
+import { formatCurrency, formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge, escapeHTML } from '../utils/helpers.js';
 import { getPatient, getClinicalRecords, saveClinicalRecord, getPhotos, savePhoto, deletePhoto, getTreatments, saveTreatment, getAppointments, getTransactions, getOdontogram, saveOdontogram, getDocuments, saveDocument, deleteDocument, getData } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { openModal, closeAllModals } from '../components/modal.js';
@@ -29,15 +29,15 @@ export function renderPatientRecord(container, patientId) {
       <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
         <div class="patient-avatar" style="width:72px;height:72px;font-size:1.4rem">${getInitials(p.name)}</div>
         <div style="flex:1">
-          <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:2px">${p.name}</h2>
+          <h2 style="font-size:1.4rem;font-weight:700;margin-bottom:2px">${escapeHTML(p.name)}</h2>
           <div style="display:flex;gap:16px;flex-wrap:wrap;color:var(--text-secondary);font-size:.82rem">
             ${p.birth ? `<span>${getAge(p.birth)} anos</span>` : ''}
             ${p.phone ? `<span>${formatPhone(p.phone)}</span>` : ''}
-            ${p.email ? `<span>${p.email}</span>` : ''}
+            ${p.email ? `<span>${escapeHTML(p.email)}</span>` : ''}
           </div>
           <div style="margin-top:8px;display:flex;gap:6px">
             <span class="status-badge status-${p.status}">${p.status === 'active' ? 'Ativo' : 'Inativo'}</span>
-            ${(p.tags||[]).map(t => `<span style="background:var(--primary-bg);color:var(--primary);padding:3px 10px;border-radius:12px;font-size:.72rem;font-weight:600">${t}</span>`).join('')}
+            ${(p.tags||[]).map(t => `<span style="background:var(--primary-bg);color:var(--primary);padding:3px 10px;border-radius:12px;font-size:.72rem;font-weight:600">${escapeHTML(t)}</span>`).join('')}
           </div>
         </div>
         <div style="display:flex;gap:8px">
@@ -90,14 +90,14 @@ export function renderPatientRecord(container, patientId) {
 
 function renderDados(tc, p) {
   tc.innerHTML = `<div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-    <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Nome Completo</label><span style="font-weight:600">${p.name}</span></div>
+    <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Nome Completo</label><span style="font-weight:600">${escapeHTML(p.name)}</span></div>
     <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">CPF</label><span>${formatCPF(p.cpf)||'-'}</span></div>
     <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Telefone</label><span>${formatPhone(p.phone)||'-'}</span></div>
-    <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Email</label><span>${p.email||'-'}</span></div>
+    <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Email</label><span>${escapeHTML(p.email||'-')}</span></div>
     <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Data de Nascimento</label><span>${formatDate(p.birth)||'-'} ${p.birth?'('+getAge(p.birth)+' anos)':''}</span></div>
     <div><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Gênero</label><span>${p.gender==='M'?'Masculino':p.gender==='F'?'Feminino':p.gender||'-'}</span></div>
-    <div style="grid-column:span 2"><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Endereço</label><span>${p.address||'-'}</span></div>
-    <div style="grid-column:span 2"><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Observações</label><span>${p.notes||'Nenhuma observação'}</span></div>
+    <div style="grid-column:span 2"><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Endereço</label><span>${escapeHTML(p.address||'-')}</span></div>
+    <div style="grid-column:span 2"><label style="font-size:.75rem;color:var(--text-muted);display:block;margin-bottom:2px">Observações</label><span>${escapeHTML(p.notes||'Nenhuma observação')}</span></div>
   </div></div>`;
 }
 
@@ -110,8 +110,8 @@ function renderHistorico(tc, patientId, records) {
     ${records.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(r => `
       <div class="timeline-item">
         <div class="t-date">${formatDateTime(r.date)}</div>
-        <div class="t-title">${r.procedure} ${r.tooth?'(Dente '+r.tooth+')':''}</div>
-        <div class="t-desc">${r.dentist} — ${r.notes||''}</div>
+        <div class="t-title">${escapeHTML(r.procedure)} ${r.tooth?'(Dente '+escapeHTML(r.tooth)+')':''}</div>
+        <div class="t-desc">${escapeHTML(r.dentist)} — ${escapeHTML(r.notes||'')}</div>
       </div>
     `).join('')}
   </div></div>`}`;
@@ -224,9 +224,9 @@ function renderFotos(tc, patientId, photos) {
     <div class="photo-grid">
       ${photos.map(ph => `
         <div class="photo-card">
-          <img src="${ph.data}" alt="${ph.category||'Foto'}"/>
+          <img src="${ph.data}" alt="${escapeHTML(ph.category||'Foto')}"/>
           <div class="photo-overlay">
-            <span>${ph.category||'Foto'} · ${formatDate(ph.createdAt)}</span>
+            <span>${escapeHTML(ph.category||'Foto')} · ${formatDate(ph.createdAt)}</span>
           </div>
         </div>
       `).join('')}
@@ -256,8 +256,8 @@ function renderTratamentos(tc, patientId, treatments) {
       ${treatments.map(t => `
         <div class="card" style="display:flex;align-items:center;gap:16px">
           <div style="flex:1">
-            <div style="font-weight:600;margin-bottom:4px">${t.procedure}</div>
-            <div style="font-size:.8rem;color:var(--text-secondary)">${t.dentist} · Início: ${formatDate(t.startDate)}</div>
+            <div style="font-weight:600;margin-bottom:4px">${escapeHTML(t.procedure)}</div>
+            <div style="font-size:.8rem;color:var(--text-secondary)">${escapeHTML(t.dentist)} · Início: ${formatDate(t.startDate)}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
               <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
                 <div style="height:100%;width:${(t.completedSessions/t.totalSessions)*100}%;background:var(--primary);border-radius:3px;transition:width .3s"></div>
@@ -308,7 +308,7 @@ function renderFinanceiro(tc, transactions, totalPaid, totalPending) {
       ${transactions.length === 0 ? '<div class="empty-state"><h3>Nenhuma transação</h3></div>' : `
       <table class="data-table"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Método</th><th>Status</th></tr></thead>
       <tbody>${transactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => `
-        <tr><td>${formatDate(t.date)}</td><td>${t.description}</td>
+        <tr><td>${formatDate(t.date)}</td><td>${escapeHTML(t.description)}</td>
         <td style="font-weight:600;color:${t.type==='income'?'var(--accent)':'var(--accent-danger)'}">${t.type==='income'?'+':'−'} ${formatCurrency(t.amount)}</td>
         <td>${t.method||'-'}</td><td><span class="status-badge status-${t.status==='paid'?'completed':'pending'}">${t.status==='paid'?'Pago':'Pendente'}</span></td></tr>
       `).join('')}</tbody></table>`}
@@ -320,7 +320,7 @@ function renderAgendamentos(tc, appointments) {
     ${appointments.length === 0 ? '<div class="empty-state"><h3>Nenhum agendamento</h3></div>' : `
     <table class="data-table"><thead><tr><th>Data</th><th>Hora</th><th>Procedimento</th><th>Dentista</th><th>Status</th></tr></thead>
     <tbody>${appointments.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a => `
-      <tr><td>${formatDate(a.date)}</td><td>${a.time}</td><td>${a.procedure}</td><td>${a.dentist}</td>
+      <tr><td>${formatDate(a.date)}</td><td>${a.time}</td><td>${escapeHTML(a.procedure)}</td><td>${escapeHTML(a.dentist)}</td>
       <td><span class="status-badge status-${a.status}">${a.status==='confirmed'?'Confirmado':a.status==='completed'?'Concluído':a.status==='cancelled'?'Cancelado':'Pendente'}</span></td></tr>
     `).join('')}</tbody></table>`}
   </div>`;
@@ -369,11 +369,11 @@ function renderDocumentos(tc, patientId, documents) {
                           <span>PDF</span>
                         </div>
                       ` : `
-                        <img src="${doc.data}" alt="${doc.name}" style="width:100%;height:100%;object-fit:cover;"/>
+                        <img src="${doc.data}" alt="${escapeHTML(doc.name)}" style="width:100%;height:100%;object-fit:cover;"/>
                       `}
                     </div>
                     <div class="doc-card-info">
-                      <span class="doc-card-name" title="${doc.name}">${doc.name}</span>
+                      <span class="doc-card-name" title="${escapeHTML(doc.name)}">${escapeHTML(doc.name)}</span>
                       <span class="doc-card-date">${formatDate(doc.createdAt)}</span>
                     </div>
                     <div class="doc-card-actions">

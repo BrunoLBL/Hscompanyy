@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, formatPhone, formatCPF, getInitials, getAge, debounce, generateId } from '../utils/helpers.js';
+import { formatDate, formatPhone, formatCPF, getInitials, getAge, debounce, generateId, escapeHTML } from '../utils/helpers.js';
 import { getPatients, savePatient, deletePatient } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { openModal, closeAllModals } from '../components/modal.js';
@@ -46,15 +46,15 @@ export function renderPatients(container) {
                 <td>
                   <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.hash='#/prontuario/${p.id}'">
                     <div class="patient-avatar">${getInitials(p.name)}</div>
-                    <div><div style="font-weight:600">${p.name}</div>
-                    <div style="font-size:.72rem;color:var(--text-muted)">${p.email||''}</div></div>
+                    <div><div style="font-weight:600">${escapeHTML(p.name)}</div>
+                    <div style="font-size:.72rem;color:var(--text-muted)">${escapeHTML(p.email||'')}</div></div>
                   </div>
                 </td>
                 <td style="font-size:.82rem">${formatCPF(p.cpf)}</td>
                 <td style="font-size:.82rem">${formatPhone(p.phone)}</td>
                 <td>${p.birth ? getAge(p.birth) + ' anos' : '-'}</td>
                 <td><span class="status-badge status-${p.status}">${p.status==='active'?'Ativo':'Inativo'}</span></td>
-                <td>${(p.tags||[]).map(t=>`<span style="background:var(--primary-bg);color:var(--primary);padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600;margin-right:4px">${t}</span>`).join('')}</td>
+                <td>${(p.tags||[]).map(t=>`<span style="background:var(--primary-bg);color:var(--primary);padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600;margin-right:4px">${escapeHTML(t)}</span>`).join('')}</td>
                 <td>
                   <div class="action-cell">
                     <button title="Ver prontuário" onclick="location.hash='#/prontuario/${p.id}'">${icon('eye',16)}</button>
@@ -99,7 +99,7 @@ export function openPatientForm(patient = null) {
     size: 'lg',
     content: `
       <div class="form-row">
-        <div class="form-group"><label>Nome Completo *</label><input type="text" id="pName" value="${p.name}" required/></div>
+        <div class="form-group"><label>Nome Completo *</label><input type="text" id="pName" value="${escapeHTML(p.name)}" required/></div>
         <div class="form-group"><label>CPF</label><input type="text" id="pCpf" value="${p.cpf||''}" maxlength="14"/></div>
       </div>
       <div class="form-row">
@@ -112,7 +112,7 @@ export function openPatientForm(patient = null) {
           <select id="pGender"><option value="">Selecione</option><option value="M" ${p.gender==='M'?'selected':''}>Masculino</option><option value="F" ${p.gender==='F'?'selected':''}>Feminino</option><option value="O" ${p.gender==='O'?'selected':''}>Outro</option></select>
         </div>
       </div>
-      <div class="form-group"><label>Endereço</label><input type="text" id="pAddress" value="${p.address||''}"/></div>
+      <div class="form-group"><label>Endereço</label><input type="text" id="pAddress" value="${escapeHTML(p.address||'')}"/></div>
       <div class="form-row">
         <div class="form-group"><label>Status</label>
           <select id="pStatus"><option value="active" ${p.status==='active'?'selected':''}>Ativo</option><option value="inactive" ${p.status==='inactive'?'selected':''}>Inativo</option></select>
@@ -126,7 +126,7 @@ export function openPatientForm(patient = null) {
         </div>
       </div>
       <div class="form-group"><label>Tags (separadas por vírgula) *</label><input type="text" id="pTags" value="${(p.tags||[]).join(', ')}" placeholder="Ex: CONVENIO, PARTICULAR"/></div>
-      <div class="form-group"><label>Observações</label><textarea id="pNotes" rows="3">${p.notes||''}</textarea></div>
+      <div class="form-group"><label>Observações</label><textarea id="pNotes" rows="3">${escapeHTML(p.notes||'')}</textarea></div>
     `,
     footer: `<button class="btn btn-secondary" id="cancelPatient">Cancelar</button><button class="btn btn-primary" id="savePatient">${isEdit?'Salvar Alterações':'Cadastrar'}</button>`
   });

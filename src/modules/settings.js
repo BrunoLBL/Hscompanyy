@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { getData, exportData, importData, resetStore, getCurrentUser, forceSync, lastSyncTime, syncStatus, saveAll, trackDeletion, flushSync, getLoggedUser, getUsers, saveUser, deleteUser, getSystemLogs, addLog } from '../modules/store.js';
-import { generateId } from '../utils/helpers.js';
+import { generateId, hashPassword } from '../utils/helpers.js';
 import { toast } from '../components/toast.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 
@@ -401,7 +401,7 @@ function openUserForm(user = null) {
     modal.querySelector('#permsGroup').style.display = isDentist ? 'none' : 'block';
   };
 
-  modal.querySelector('#saveUserBtn').onclick = () => {
+  modal.querySelector('#saveUserBtn').onclick = async () => {
     const name = modal.querySelector('#userName').value.trim();
     const role = modal.querySelector('#userRole').value;
     const password = modal.querySelector('#userPassword').value;
@@ -431,7 +431,7 @@ function openUserForm(user = null) {
       permissions,
       dentistId: role === 'dentista' ? dentistId : null
     };
-    if (password) userData.password = password;
+    if (password) userData.password = await hashPassword(password);
 
     saveUser(userData);
     addLog(isEdit ? 'update' : 'create', 'user', userData.id, `${isEdit ? 'Editou' : 'Criou'} usuário: ${name}`);

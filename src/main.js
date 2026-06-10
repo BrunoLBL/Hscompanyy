@@ -29,8 +29,7 @@ async function bootstrap() {
   initToast();
   initModal();
 
-  // Expõe dados para uso interno (login.js precisa)
-  window.__hsData = getData();
+  // Expõe dados para uso interno removido por questões de segurança
 
   // Verifica se há usuário logado
   const loggedUser = getLoggedUser();
