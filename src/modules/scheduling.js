@@ -50,7 +50,7 @@ export function renderScheduling(container) {
   container.querySelector('#prevMonth').onclick = () => { viewDate = new Date(y, m - 1, 1); renderScheduling(container); };
   container.querySelector('#nextMonth').onclick = () => { viewDate = new Date(y, m + 1, 1); renderScheduling(container); };
   container.querySelector('#todayBtn').onclick = () => { viewDate = new Date(); renderScheduling(container); };
-  container.querySelector('#newApptBtn').onclick = () => openApptForm(null, container);
+  container.querySelector('#newApptBtn').onclick = () => openDateSelectionModal(container);
   container.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { viewMode = b.dataset.view; renderScheduling(container); }));
   
   const filterEl = container.querySelector('#dentistFilter');
@@ -349,4 +349,56 @@ function openDayAppointmentsModal(dateStr, dayAppts, parentContainer) {
     document.querySelector('.modal-backdrop')?.remove();
     openApptForm({ date: dateStr }, parentContainer);
   });
+}
+
+function openDateSelectionModal(parentContainer) {
+  const today = new Date();
+  
+  const modal = openModal({
+    title: 'Escolha a Data da Consulta',
+    content: `
+      <div style="display:flex; flex-direction:column; gap: 20px; align-items:center; padding: 20px 0;">
+        <div style="background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; border-radius: 50%; width: 64px; height: 64px; display:flex; align-items:center; justify-content:center; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);">
+          ${icon('calendar', 32)}
+        </div>
+        <h3 style="font-weight: 600; text-align: center; margin: 0; font-size: 1.25rem;">Para qual dia deseja agendar?</h3>
+        
+        <div style="width: 100%; max-width: 320px; margin-top: 10px;">
+          <input type="date" id="selectedDateInput" value="${today.toISOString().slice(0, 10)}" 
+            style="width: 100%; padding: 16px; border-radius: 12px; border: 2px solid var(--primary); font-size: 1.2rem; font-weight: 600; text-align: center; color: var(--text-main); outline: none; box-shadow: 0 2px 10px rgba(0,0,0,0.05); cursor: pointer;"
+          />
+        </div>
+        
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; margin-top: 10px;">
+          <button class="btn btn-secondary btn-sm date-quick-btn" data-days="0" style="padding: 8px 16px;">Hoje</button>
+          <button class="btn btn-secondary btn-sm date-quick-btn" data-days="1" style="padding: 8px 16px;">Amanhã</button>
+          <button class="btn btn-secondary btn-sm date-quick-btn" data-days="7" style="padding: 8px 16px;">Próxima Semana</button>
+        </div>
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
+      <button class="btn btn-primary" id="continueToApptBtn" style="min-width: 150px; justify-content: center;">Continuar ${icon('chevronRight', 16)}</button>
+    `
+  });
+
+  const dateInput = modal.querySelector('#selectedDateInput');
+
+  modal.querySelectorAll('.date-quick-btn').forEach(btn => {
+    btn.onclick = () => {
+      const targetDate = new Date();
+      targetDate.setDate(today.getDate() + parseInt(btn.dataset.days));
+      dateInput.value = targetDate.toISOString().slice(0, 10);
+    };
+  });
+
+  modal.querySelector('#continueToApptBtn').onclick = () => {
+    const selectedDate = dateInput.value;
+    if (!selectedDate) {
+      toast.error('Por favor, escolha uma data válida.');
+      return;
+    }
+    document.querySelector('.modal-backdrop')?.remove();
+    openApptForm({ date: selectedDate }, parentContainer);
+  };
 }
