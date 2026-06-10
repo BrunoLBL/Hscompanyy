@@ -67,12 +67,7 @@ export function renderSettings(container) {
           <button class="btn ${isAdmin ? 'btn-secondary' : 'btn-disabled'} btn-sm" id="importBtn" ${!isAdmin ? 'disabled title="Apenas Administradores podem importar dados"' : ''}>${icon('upload',14)} Importar Dados</button>
           ${isAdmin ? `<input type="file" id="importFile" accept=".json" style="display:none"/>` : ''}
         </div>
-        ${isAdmin ? `
-        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px">
-          <h4 style="font-weight:600;margin-bottom:12px;color:var(--accent-danger)">${icon('trash',18)} Zona de Perigo</h4>
-          <p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:12px">Limpar todos os dados irá remover pacientes, agendamentos, financeiro e estoque.</p>
-          <button class="btn btn-danger btn-sm" id="clearBtn">${icon('trash',14)} Limpar Todos os Dados</button>
-        </div>` : ''}
+
       </div>
 
       <div class="card">
@@ -271,15 +266,7 @@ export function renderSettings(container) {
       };
       reader.readAsText(file);
     };
-    document.getElementById('clearBtn').onclick = async () => {
-      if (confirm('ATENÇÃO: Isso irá apagar TODOS os dados. Deseja continuar?')) {
-        resetStore();
-        toast.success('Sincronizando limpeza com o servidor...');
-        await flushSync();
-        toast.success('Dados limpos! Recarregando...');
-        setTimeout(() => location.reload(), 500);
-      }
-    };
+
 
     // ─── Gerenciar Usuários ─────────────────────────────────────────────
     renderUsersList();
