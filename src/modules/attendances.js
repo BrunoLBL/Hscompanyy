@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatDate, escapeHTML } from '../utils/helpers.js';
-import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess } from './store.js';
+import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess, savePatient } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
@@ -87,11 +87,16 @@ function openNewAttendanceModal(parentContainer) {
         <div class="form-group" style="margin-bottom:16px;">
           <label>Paciente *</label>
           <div style="display:flex; gap:8px;">
-            <select id="attPatient" style="flex:1;">
-              <option value="">Selecione um paciente cadastrado...</option>
-              ${patients.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}
-            </select>
-            <button class="btn btn-secondary" id="registerNewPatientBtn" type="button">${icon('plus', 16)} Cadastrar</button>
+            <div id="patientSelectWrapper" style="flex:1; display:block;">
+              <select id="attPatient" style="width:100%;">
+                <option value="">Selecione um paciente cadastrado...</option>
+                ${patients.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div id="patientInputWrapper" style="flex:1; display:none;">
+              <input type="text" id="attPatientName" placeholder="Nome do paciente avulso" style="width:100%;" />
+            </div>
+            <button class="btn btn-secondary" id="toggleAvulsoModeBtn" type="button">${icon('user', 16)} Avulso</button>
           </div>
         </div>
         <div class="form-row" style="margin-bottom:16px;">
@@ -142,48 +147,82 @@ function openNewAttendanceModal(parentContainer) {
   window.startScheduledAppt = (id) => {
     const appt = todayAppts.find(a => a.id === id);
     if (!appt) return;
-
+    
+    if (isAvulsoMode) {
+      modal.querySelector('#toggleAvulsoModeBtn').click();
+    }
+    
     modal.querySelector('#attPatient').value = appt.patientId;
     modal.querySelector('#attProc').value = appt.procedure;
-
+    
     const dentistSelect = modal.querySelector('#attDentist');
     if (dentistSelect.querySelector(`option[value="${appt.dentist}"]`)) {
       dentistSelect.value = appt.dentist;
     }
-
+    
     modal.dataset.appointmentId = appt.id;
-
+    
     tabAvulso.onclick();
     toast.info('Preencha o valor para iniciar.');
     modal.querySelector('#attValue').focus();
   };
 
-  modal.querySelector('#registerNewPatientBtn').addEventListener('click', () => {
-    closeAllModals();
-    window.location.hash = '#/pacientes';
+  let isAvulsoMode = false;
+  modal.querySelector('#toggleAvulsoModeBtn').addEventListener('click', (e) => {
+    isAvulsoMode = !isAvulsoMode;
+    const selectWrap = modal.querySelector('#patientSelectWrapper');
+    const inputWrap = modal.querySelector('#patientInputWrapper');
+    const btn = e.currentTarget;
+    if (isAvulsoMode) {
+      selectWrap.style.display = 'none';
+      inputWrap.style.display = 'block';
+      btn.innerHTML = `${icon('list', 16)} Lista`;
+      btn.classList.replace('btn-secondary', 'btn-primary');
+    } else {
+      selectWrap.style.display = 'block';
+      inputWrap.style.display = 'none';
+      btn.innerHTML = `${icon('user', 16)} Avulso`;
+      btn.classList.replace('btn-primary', 'btn-secondary');
+    }
   });
 
   modal.querySelector('#startAttBtn').addEventListener('click', () => {
-    const patientId = modal.querySelector('#attPatient').value;
+    let patientId = modal.querySelector('#attPatient').value;
+    let patientName = '';
     const procedure = modal.querySelector('#attProc').value;
     const value = modal.querySelector('#attValue').value;
     const dentist = modal.querySelector('#attDentist').value;
 
-    if (!patientId || !procedure || !value) {
-      toast.error('Preencha todos os campos obrigatórios (Paciente, Procedimento e Valor)');
-      return;
+    if (isAvulsoMode) {
+      patientName = modal.querySelector('#attPatientName').value.trim();
+      if (!patientName || !procedure || !value) {
+        toast.error('Preencha todos os campos obrigatórios (Nome, Procedimento e Valor)');
+        return;
+      }
+      const newPatient = savePatient({ 
+        name: patientName, 
+        status: 'active',
+        tags: ['Avulso'],
+        notes: 'Cadastrado automaticamente via atendimento avulso.'
+      });
+      patientId = newPatient.id;
+    } else {
+      if (!patientId || !procedure || !value) {
+        toast.error('Preencha todos os campos obrigatórios (Paciente, Procedimento e Valor)');
+        return;
+      }
+      const patient = patients.find(p => p.id === patientId);
+      patientName = patient ? patient.name : 'Desconhecido';
     }
-
-    const patient = patients.find(p => p.id === patientId);
 
     saveAttendance({
       patientId,
-      patientName: patient.name,
+      patientName: patientName,
       procedure,
       value: Number(value),
       dentist
     });
-
+    
     if (modal.dataset.appointmentId) {
       const appt = todayAppts.find(a => a.id === modal.dataset.appointmentId);
       if (appt) saveAppointment({ ...appt, status: 'completed' });
