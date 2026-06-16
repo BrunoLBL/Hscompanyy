@@ -1,5 +1,5 @@
 export function formatCurrency(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
-export function formatDate(d){if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('pt-BR')}
+export function formatDate(d){if(!d)return'';const s=String(d);const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);const dt=m?new Date(+m[1],+m[2]-1,+m[3]):new Date(d);return dt.toLocaleDateString('pt-BR')}
 export function formatDateTime(d){if(!d)return'';const dt=new Date(d);return dt.toLocaleDateString('pt-BR')+' '+dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
 export function formatPhone(p){if(!p)return'';const n=p.replace(/\D/g,'');if(n.length===11)return`(${n.slice(0,2)}) ${n.slice(2,7)}-${n.slice(7)}`;if(n.length===10)return`(${n.slice(0,2)}) ${n.slice(2,6)}-${n.slice(6)}`;return p}
 export function formatCPF(c){if(!c)return'';const n=c.replace(/\D/g,'');if(n.length===11)return`${n.slice(0,3)}.${n.slice(3,6)}.${n.slice(6,9)}-${n.slice(9)}`;return c}
