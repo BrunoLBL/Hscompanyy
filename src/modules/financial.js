@@ -19,11 +19,16 @@ export function renderFinancial(container) {
 
   // Filter by period
   let filtered = [...transactions];
-  if (filterPeriod === 'month') {
-    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  // Get today's date in Brasilia timezone (America/Sao_Paulo)
+  const brasiliaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // 'en-CA' gives YYYY-MM-DD format
+  if (filterPeriod === 'day') {
+    filtered = filtered.filter(t => t.date && t.date === brasiliaDateStr);
+  } else if (filterPeriod === 'month') {
+    const currentMonthStr = brasiliaDateStr.substring(0, 7);
     filtered = filtered.filter(t => t.date && t.date.startsWith(currentMonthStr));
   } else if (filterPeriod === 'week') {
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [bYear, bMonth, bDay] = brasiliaDateStr.split('-').map(Number);
+    const today = new Date(bYear, bMonth - 1, bDay);
     const day = today.getDay();
     const diffToMonday = day === 0 ? 6 : day - 1; // Segunda-feira
     
@@ -81,6 +86,7 @@ export function renderFinancial(container) {
             <option value="all" ${filterPeriod==='all'?'selected':''}>Todo período</option>
             <option value="month" ${filterPeriod==='month'?'selected':''}>Este mês</option>
             <option value="week" ${filterPeriod==='week'?'selected':''}>Esta semana</option>
+            <option value="day" ${filterPeriod==='day'?'selected':''}>Hoje</option>
           </select>
           <select id="finType">
             <option value="all" ${filterType==='all'?'selected':''}>Todos Tipos</option>
