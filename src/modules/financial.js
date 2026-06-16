@@ -19,8 +19,9 @@ export function renderFinancial(container) {
 
   // Filter by period
   let filtered = [...transactions];
-  // Get today's date in Brasilia timezone (America/Sao_Paulo)
-  const brasiliaDateStr = now.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // 'en-CA' gives YYYY-MM-DD format
+  // Get today's date in Brasilia timezone (America/Sao_Paulo) using formatToParts for reliable YYYY-MM-DD
+  const _bParts = new Intl.DateTimeFormat('en', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const brasiliaDateStr = `${_bParts.find(p=>p.type==='year').value}-${_bParts.find(p=>p.type==='month').value}-${_bParts.find(p=>p.type==='day').value}`;
   if (filterPeriod === 'day') {
     filtered = filtered.filter(t => t.date && t.date === brasiliaDateStr);
   } else if (filterPeriod === 'month') {
