@@ -20,10 +20,23 @@ export function renderFinancial(container) {
   // Filter by period
   let filtered = [...transactions];
   if (filterPeriod === 'month') {
-    filtered = filtered.filter(t => { const d = new Date(t.date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+    const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    filtered = filtered.filter(t => t.date && t.date.startsWith(currentMonthStr));
   } else if (filterPeriod === 'week') {
-    const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate() - 7);
-    filtered = filtered.filter(t => new Date(t.date) >= weekAgo);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const day = today.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1; // Segunda-feira
+    
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - diffToMonday);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6); // Domingo
+    
+    const startStr = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')}`;
+    const endStr = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
+    
+    filtered = filtered.filter(t => t.date && t.date >= startStr && t.date <= endStr);
   }
   if (filterType !== 'all') filtered = filtered.filter(t => t.type === filterType);
   if (filterStatus !== 'all') filtered = filtered.filter(t => t.status === filterStatus);
@@ -145,7 +158,8 @@ export function renderFinancial(container) {
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(d.toLocaleDateString('pt-BR', { month: 'short' }));
-    const mt = transactions.filter(t => { const td = new Date(t.date); return td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear(); });
+    const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const mt = transactions.filter(t => t.date && t.date.startsWith(monthStr));
     incArr.push(mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
     expArr.push(mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
   }
