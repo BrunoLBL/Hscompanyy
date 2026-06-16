@@ -93,6 +93,7 @@ export function renderFinancial(container) {
           <td style="font-weight:700;color:${t.type==='income'?'var(--accent)':'var(--accent-danger)'}">${t.type==='income'?'+':'−'} ${formatCurrency(t.amount)}</td>
           <td><span class="status-badge status-${t.status==='paid'?'completed':'pending'}">${t.status==='paid'?'Pago':'Pendente'}</span></td>
           <td><div class="action-cell">
+            ${t.status!=='paid'?`<button title="Confirmar pagamento" data-confirm="${t.id}" style="color:var(--accent);border-color:var(--accent)">${icon('check',14)}</button>`:''}
             <button title="Excluir" data-del="${t.id}">${icon('trash',14)}</button>
           </div></td>
         </tr>`).join('')}</tbody></table>
@@ -122,6 +123,18 @@ export function renderFinancial(container) {
     document.getElementById('finNextPage').onclick = () => { currentPage++; renderFinancial(container); };
     container.querySelectorAll('[data-page]').forEach(b => b.onclick = (e) => { currentPage = parseInt(e.target.dataset.page); renderFinancial(container); });
   }
+
+  container.querySelectorAll('[data-confirm]').forEach(b => b.onclick = () => {
+    if (confirm('Confirmar pagamento deste lançamento?')) {
+      const tx = getTransactions().find(t => t.id === b.dataset.confirm);
+      if (tx) {
+        tx.status = 'paid';
+        saveTransaction(tx);
+        toast.success('Pagamento confirmado!');
+        renderFinancial(container);
+      }
+    }
+  });
 
   container.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     if (confirm('Excluir lançamento?')) { deleteTransaction(b.dataset.del); toast.success('Excluído'); renderFinancial(container); }
