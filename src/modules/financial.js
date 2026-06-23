@@ -202,6 +202,10 @@ function openTransactionForm(type, parentContainer) {
   const cats = type === 'income' ? ['Procedimento','Convênio','Outros'] : ['Material','Aluguel','Salário','Marketing','Manutenção','Equipamento','Outros'];
   const methods = ['PIX','Cartão Crédito','Cartão Débito','Dinheiro','Boleto','Convênio'];
 
+  // Track selected patient for autocomplete
+  let selectedPatientId = null;
+  let selectedPatientName = null;
+
   const modal = openModal({
     title: type === 'income' ? 'Nova Receita' : 'Nova Despesa',
     content: `
@@ -218,7 +222,11 @@ function openTransactionForm(type, parentContainer) {
         <div class="form-group"><label>Forma de Pagamento</label>
           <select id="txMethod">${methods.map(m => `<option>${m}</option>`).join('')}</select></div>
         ${type === 'income' ? `<div class="form-group"><label>Paciente</label>
-          <select id="txPatient"><option value="">Nenhum</option>${patients.map(p => `<option value="${p.id}">${escapeHTML(p.name)}</option>`).join('')}</select></div>` : '<div></div>'}
+          <div class="autocomplete-wrapper" id="patientAutocomplete">
+            <input type="text" id="txPatientSearch" placeholder="Pesquisar paciente..." autocomplete="off"/>
+            <input type="hidden" id="txPatient" value=""/>
+            <div class="autocomplete-dropdown" id="patientDropdown"></div>
+          </div></div>` : '<div></div>'}
       </div>
       <div class="form-group"><label>Status</label>
         <select id="txStatus"><option value="paid">Pago</option><option value="pending">Pendente</option></select></div>
@@ -226,6 +234,83 @@ function openTransactionForm(type, parentContainer) {
     footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
       <button class="btn btn-primary" id="saveTxBtn">Salvar</button>`
   });
+
+  // Setup patient autocomplete
+  const searchInput = modal.querySelector('#txPatientSearch');
+  const hiddenInput = modal.querySelector('#txPatient');
+  const dropdown = modal.querySelector('#patientDropdown');
+
+  if (searchInput && dropdown) {
+    const renderDropdownItems = (query) => {
+      const q = query.toLowerCase().trim();
+      let matches = patients;
+      if (q.length > 0) {
+        matches = patients.filter(p => p.name.toLowerCase().includes(q));
+      }
+
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-item autocomplete-empty">Nenhum paciente encontrado</div>';
+        dropdown.classList.add('open');
+        return;
+      }
+
+      dropdown.innerHTML = matches.map(p => `
+        <div class="autocomplete-item" data-id="${p.id}" data-name="${escapeHTML(p.name)}">
+          <span class="autocomplete-item-name">${escapeHTML(p.name)}</span>
+          ${p.phone ? `<span class="autocomplete-item-detail">${escapeHTML(p.phone)}</span>` : ''}
+        </div>
+      `).join('');
+      dropdown.classList.add('open');
+
+      // Attach click handlers to each item
+      dropdown.querySelectorAll('.autocomplete-item[data-id]').forEach(item => {
+        item.addEventListener('click', () => {
+          selectedPatientId = item.dataset.id;
+          selectedPatientName = item.dataset.name;
+          searchInput.value = item.dataset.name;
+          hiddenInput.value = item.dataset.id;
+          dropdown.classList.remove('open');
+          dropdown.innerHTML = '';
+        });
+      });
+    };
+
+    searchInput.addEventListener('input', () => {
+      // Clear selection if user edits the text
+      selectedPatientId = null;
+      selectedPatientName = null;
+      hiddenInput.value = '';
+      const q = searchInput.value;
+      if (q.length === 0) {
+        dropdown.classList.remove('open');
+        dropdown.innerHTML = '';
+        return;
+      }
+      renderDropdownItems(q);
+    });
+
+    searchInput.addEventListener('focus', () => {
+      if (searchInput.value.length > 0) {
+        renderDropdownItems(searchInput.value);
+      }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function _closeDropdown(e) {
+      if (!e.target.closest('#patientAutocomplete')) {
+        dropdown.classList.remove('open');
+        // If typed something but didn't pick, clear
+        if (!selectedPatientId && searchInput.value) {
+          searchInput.value = '';
+          hiddenInput.value = '';
+        }
+      }
+      // Clean up listener when modal is removed
+      if (!document.body.contains(modal)) {
+        document.removeEventListener('click', _closeDropdown);
+      }
+    });
+  }
 
   modal.querySelector('#saveTxBtn').onclick = () => {
     const amount = +modal.querySelector('#txAmount').value;

@@ -443,3 +443,93 @@ cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(
 
 /* ─── Disabled button ─────────────────────────────────────── */
 .btn-disabled { opacity: .5; cursor: not-allowed; background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+
+/* ─── Autocomplete Search ─────────────────────────────────── */
+.autocomplete-wrapper {
+  position: relative;
+  width: 100%;
+}
+.autocomplete-wrapper input[type="text"] {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: .85rem;
+  transition: var(--transition);
+  background: var(--bg-card);
+}
+.autocomplete-wrapper input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-bg);
+}
+.autocomplete-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 1100;
+  display: none;
+  animation: autocompleteIn .15s ease;
+}
+.autocomplete-dropdown.open {
+  display: block;
+}
+@keyframes autocompleteIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.autocomplete-dropdown::-webkit-scrollbar {
+  width: 5px;
+}
+.autocomplete-dropdown::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.autocomplete-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: var(--transition);
+  border-bottom: 1px solid rgba(0,0,0,.03);
+}
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+.autocomplete-item:hover {
+  background: var(--primary-bg);
+}
+.autocomplete-item-name {
+  font-size: .85rem;
+  font-weight: 500;
+  color: var(--text);
+}
+.autocomplete-item:hover .autocomplete-item-name {
+  color: var(--primary);
+}
+.autocomplete-item-detail {
+  font-size: .75rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.autocomplete-empty {
+  cursor: default;
+  color: var(--text-muted);
+  font-size: .82rem;
+  font-style: italic;
+  justify-content: center;
+}
+.autocomplete-empty:hover {
+  background: transparent;
+}
+
