@@ -7,13 +7,67 @@ import { toast } from '../components/toast.js';
 export function renderAttendances(container) {
   const attendances = getAttendances();
 
+  // ─── Dashboard do Dia: agendamentos de hoje por status ───
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayAppts = getAppointments().filter(a => a.date === todayStr);
+  const confirmedAppts = todayAppts.filter(a => a.status === 'confirmed');
+  const pendingAppts = todayAppts.filter(a => a.status === 'pending');
+  const completedAppts = todayAppts.filter(a => a.status === 'completed');
+
+  const todayFormatted = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+
   container.innerHTML = `
     <div class="page-title-bar">
       <div><h2>Atendimentos em Aberto</h2><p>Gerencie os pacientes aguardando ou em atendimento na clínica</p></div>
       <button class="btn btn-primary" id="newAttendanceBtn">${icon('plus', 16)} Iniciar Atendimento</button>
     </div>
-    
-    <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+
+    <!-- ─── Dashboard do Dia ─── -->
+    <div class="att-dashboard-section">
+      <div class="att-dashboard-header">
+        <div class="att-dashboard-header-left">
+          <div class="att-dashboard-icon-wrap">
+            ${icon('calendar', 22)}
+          </div>
+          <div>
+            <h3 class="att-dashboard-title">Painel do Dia</h3>
+            <p class="att-dashboard-subtitle">${todayFormatted.charAt(0).toUpperCase() + todayFormatted.slice(1)} · ${todayAppts.length} agendamento${todayAppts.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="att-dashboard-cards">
+        <div class="att-dash-card att-dash-card--confirmed" id="dashCardConfirmed" role="button" tabindex="0" title="Ver pacientes confirmados">
+          <div class="att-dash-card__icon-ring att-dash-card__icon-ring--confirmed">
+            ${icon('check', 24)}
+          </div>
+          <div class="att-dash-card__count">${confirmedAppts.length}</div>
+          <div class="att-dash-card__label">Confirmados</div>
+          <div class="att-dash-card__hint">Clique para ver detalhes</div>
+        </div>
+
+        <div class="att-dash-card att-dash-card--pending" id="dashCardPending" role="button" tabindex="0" title="Ver pacientes pendentes">
+          <div class="att-dash-card__icon-ring att-dash-card__icon-ring--pending">
+            ${icon('clock', 24)}
+          </div>
+          <div class="att-dash-card__count">${pendingAppts.length}</div>
+          <div class="att-dash-card__label">Pendentes</div>
+          <div class="att-dash-card__hint">Clique para ver detalhes</div>
+        </div>
+
+        <div class="att-dash-card att-dash-card--completed" id="dashCardCompleted" role="button" tabindex="0" title="Ver pacientes concluídos">
+          <div class="att-dash-card__icon-ring att-dash-card__icon-ring--completed">
+            ${icon('activity', 24)}
+          </div>
+          <div class="att-dash-card__count">${completedAppts.length}</div>
+          <div class="att-dash-card__label">Concluídos</div>
+          <div class="att-dash-card__hint">Clique para ver detalhes</div>
+        </div>
+      </div>
+    </div>
+    <!-- ─── Fim Dashboard ─── -->
+
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
       ${attendances.length === 0 ? `
         <div class="card" style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
           ${icon('activity', 48)}
@@ -41,12 +95,84 @@ export function renderAttendances(container) {
     </div>
   `;
 
+  // ─── Dashboard card click handlers ───
+  container.querySelector('#dashCardConfirmed').addEventListener('click', () => {
+    openDashboardPopup('Confirmados', confirmedAppts, 'confirmed');
+  });
+  container.querySelector('#dashCardPending').addEventListener('click', () => {
+    openDashboardPopup('Pendentes', pendingAppts, 'pending');
+  });
+  container.querySelector('#dashCardCompleted').addEventListener('click', () => {
+    openDashboardPopup('Concluídos', completedAppts, 'completed');
+  });
+
   container.querySelector('#newAttendanceBtn').addEventListener('click', () => openNewAttendanceModal(container));
 
   container.querySelectorAll('.finish-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const id = e.currentTarget.dataset.id;
       finishAttendance(id, container);
+    });
+  });
+}
+
+// ─── Popup do Dashboard: lista de pacientes por status ───
+function openDashboardPopup(title, appointments, statusKey) {
+  const statusColors = {
+    confirmed: { bg: 'rgba(0,196,140,.08)', border: '#00C48C', text: '#00C48C', label: 'Confirmado' },
+    pending:   { bg: 'rgba(245,166,35,.08)', border: '#F5A623', text: '#D4880F', label: 'Pendente' },
+    completed: { bg: 'rgba(30,111,217,.08)', border: '#1E6FD9', text: '#1E6FD9', label: 'Concluído' }
+  };
+  const sc = statusColors[statusKey] || statusColors.pending;
+
+  const statusIcon = statusKey === 'confirmed' ? icon('check', 20) : statusKey === 'completed' ? icon('activity', 20) : icon('clock', 20);
+
+  const modal = openModal({
+    title: `Pacientes — ${title} Hoje`,
+    size: 'lg',
+    content: `
+      <div class="att-popup-header-bar" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:${sc.bg};border-radius:var(--radius);margin-bottom:20px;border:1px solid ${sc.border}20;">
+        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:${sc.border}18;color:${sc.text};">
+          ${statusIcon}
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:1rem;color:${sc.text};">${appointments.length} ${title}</div>
+          <div style="font-size:.8rem;color:var(--text-secondary);">Agendamentos para hoje · ${new Date().toLocaleDateString('pt-BR')}</div>
+        </div>
+      </div>
+      ${appointments.length === 0 ? `
+        <div style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+          ${icon('calendar', 40)}
+          <p style="margin-top:12px;font-size:.9rem;">Nenhum agendamento ${title.toLowerCase()} para hoje.</p>
+        </div>
+      ` : `
+        <div class="att-popup-patient-list">
+          ${appointments.sort((a, b) => a.time.localeCompare(b.time)).map(a => `
+            <div class="att-popup-patient-item" data-patient-id="${a.patientId}">
+              <div class="att-popup-patient-avatar">${escapeHTML(a.patientName).charAt(0).toUpperCase()}</div>
+              <div class="att-popup-patient-info">
+                <a href="#/prontuario/${a.patientId}" class="att-popup-patient-name">${escapeHTML(a.patientName)}</a>
+                <div class="att-popup-patient-details">
+                  <span>${icon('clock', 12)} ${a.time}</span>
+                  <span>${icon('fileText', 12)} ${escapeHTML(a.procedure)}</span>
+                  <span>${icon('user', 12)} ${escapeHTML(a.dentist)}</span>
+                </div>
+              </div>
+              <span class="status-badge status-${a.status}" style="font-size:.7rem;flex-shrink:0;">${sc.label}</span>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    `,
+    footer: `
+      <button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Fechar</button>
+    `
+  });
+
+  // Clicking a patient name navigates to profile and closes modal
+  modal.querySelectorAll('.att-popup-patient-name').forEach(link => {
+    link.addEventListener('click', () => {
+      closeAllModals();
     });
   });
 }

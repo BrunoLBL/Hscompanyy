@@ -533,3 +533,238 @@ cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(
   background: transparent;
 }
 
+/* ─── Attendances Dashboard (Painel do Dia) ────────────────── */
+.att-dashboard-section {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.att-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.att-dashboard-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.att-dashboard-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(30,111,217,.25);
+  flex-shrink: 0;
+}
+.att-dashboard-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.att-dashboard-subtitle {
+  font-size: .82rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.att-dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .att-dashboard-cards { grid-template-columns: 1fr; }
+}
+@media (min-width: 769px) and (max-width: 1024px) {
+  .att-dashboard-cards { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ─── Individual Dashboard Card ───────────────────────────── */
+.att-dash-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 28px 20px 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all .3s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+.att-dash-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  transition: height .3s ease;
+}
+.att-dash-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,.1);
+}
+.att-dash-card:hover::before {
+  height: 5px;
+}
+
+/* Card accent colors */
+.att-dash-card--confirmed { border-color: rgba(0,196,140,.2); }
+.att-dash-card--confirmed::before { background: linear-gradient(90deg, #00C48C, #00E6A0); }
+.att-dash-card--confirmed:hover { border-color: #00C48C; box-shadow: 0 12px 32px rgba(0,196,140,.15); }
+
+.att-dash-card--pending { border-color: rgba(245,166,35,.2); }
+.att-dash-card--pending::before { background: linear-gradient(90deg, #F5A623, #FFB84D); }
+.att-dash-card--pending:hover { border-color: #F5A623; box-shadow: 0 12px 32px rgba(245,166,35,.15); }
+
+.att-dash-card--completed { border-color: rgba(30,111,217,.2); }
+.att-dash-card--completed::before { background: linear-gradient(90deg, #1E6FD9, #4A90E2); }
+.att-dash-card--completed:hover { border-color: #1E6FD9; box-shadow: 0 12px 32px rgba(30,111,217,.15); }
+
+/* Icon ring */
+.att-dash-card__icon-ring {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  transition: transform .3s ease;
+}
+.att-dash-card:hover .att-dash-card__icon-ring {
+  transform: scale(1.1);
+}
+.att-dash-card__icon-ring--confirmed {
+  background: rgba(0,196,140,.1);
+  color: #00C48C;
+}
+.att-dash-card__icon-ring--pending {
+  background: rgba(245,166,35,.1);
+  color: #F5A623;
+}
+.att-dash-card__icon-ring--completed {
+  background: rgba(30,111,217,.1);
+  color: #1E6FD9;
+}
+
+/* Count number */
+.att-dash-card__count {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.att-dash-card--confirmed .att-dash-card__count { color: #00C48C; }
+.att-dash-card--pending .att-dash-card__count { color: #F5A623; }
+.att-dash-card--completed .att-dash-card__count { color: #1E6FD9; }
+
+/* Label */
+.att-dash-card__label {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+/* Hint */
+.att-dash-card__hint {
+  font-size: .72rem;
+  color: var(--text-muted);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: all .25s ease;
+}
+.att-dash-card:hover .att-dash-card__hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Dashboard Popup Patient List ────────────────────────── */
+.att-popup-patient-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.att-popup-patient-list::-webkit-scrollbar {
+  width: 5px;
+}
+.att-popup-patient-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+.att-popup-patient-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background .2s ease;
+}
+.att-popup-patient-item:last-child {
+  border-bottom: none;
+}
+.att-popup-patient-item:hover {
+  background: var(--primary-bg);
+}
+.att-popup-patient-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.att-popup-patient-info {
+  flex: 1;
+  min-width: 0;
+}
+.att-popup-patient-name {
+  display: inline-block;
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color .2s ease;
+}
+.att-popup-patient-name:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.att-popup-patient-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+.att-popup-patient-details span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: .78rem;
+  color: var(--text-muted);
+}
+
+
