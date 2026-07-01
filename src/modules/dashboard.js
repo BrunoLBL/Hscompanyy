@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate, isToday } from '../utils/helpers.js';
+import { formatCurrency, formatDate, isToday, isNoShow } from '../utils/helpers.js';
 import { getPatients, getAppointments, getTransactions, getInventory, getCurrentUser } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { Chart, registerables } from 'chart.js';
@@ -89,7 +89,7 @@ export function renderDashboard(container) {
                 <div style="font-weight:600;font-size:.85rem">${a.patientName}</div>
                 <div style="font-size:.75rem;color:var(--text-muted)">${a.procedure} · ${a.dentist}</div>
               </div>
-              <span class="status-badge status-${a.status}">${a.status==='confirmed'?'Confirmado':a.status==='pending'?'Pendente':'Concluído'}</span>
+              ${isNoShow(a, now) ? `<span class="status-badge status-cancelled">Faltou</span>` : `<span class="status-badge status-${a.status}">${a.status==='confirmed'?'Confirmado':a.status==='pending'?'Pendente':'Concluído'}</span>`}
             </div>
           `).join('')}
         </div>`}

@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, isToday, generateId, escapeHTML } from '../utils/helpers.js';
+import { formatDate, isToday, generateId, escapeHTML, isNoShow } from '../utils/helpers.js';
 import { getAppointments, saveAppointment, deleteAppointment, getPatients, getData, completeAppointmentProcess } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -23,7 +23,10 @@ export function renderScheduling(container) {
   container.innerHTML = `
     <div class="page-title-bar">
       <div><h2>Agendamento</h2><p>Gerencie as consultas da clínica</p></div>
-      <button class="btn btn-primary" id="newApptBtn">${icon('plus',16)} Nova Consulta</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-secondary" id="faltasBtn" style="border-color:rgba(231,76,60,.3);color:var(--accent-danger);">${icon('alertCircle',16)} Faltas</button>
+        <button class="btn btn-primary" id="newApptBtn">${icon('plus',16)} Nova Consulta</button>
+      </div>
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
@@ -51,6 +54,7 @@ export function renderScheduling(container) {
   container.querySelector('#nextMonth').onclick = () => { viewDate = new Date(y, m + 1, 1); renderScheduling(container); };
   container.querySelector('#todayBtn').onclick = () => { viewDate = new Date(); renderScheduling(container); };
   container.querySelector('#newApptBtn').onclick = () => openDateSelectionModal(container);
+  container.querySelector('#faltasBtn').onclick = () => openFaltasModal();
   container.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { viewMode = b.dataset.view; renderScheduling(container); }));
   
   const filterEl = container.querySelector('#dentistFilter');
@@ -319,7 +323,7 @@ function openDayAppointmentsModal(dateStr, dayAppts, parentContainer) {
                     ${photoHtml} ${escapeHTML(a.procedure)} · <span style="margin-left:4px;font-weight:500;">${escapeHTML(a.dentist)}</span>
                   </div>
                 </div>
-                <span class="status-badge status-${a.status}">${a.status === 'confirmed' ? 'Confirmado' : a.status === 'completed' ? 'Concluído' : a.status === 'cancelled' ? 'Cancelado' : 'Pendente'}</span>
+                ${isNoShow(a, new Date()) ? `<span class="status-badge status-cancelled">Faltou</span>` : `<span class="status-badge status-${a.status}">${a.status === 'confirmed' ? 'Confirmado' : a.status === 'completed' ? 'Concluído' : a.status === 'cancelled' ? 'Cancelado' : 'Pendente'}</span>`}
               </div>
             </div>
           `;
@@ -402,3 +406,168 @@ function openDateSelectionModal(parentContainer) {
     openApptForm({ date: selectedDate }, parentContainer);
   };
 }
+
+// ─── Modal de Faltas (No-Shows) ──────────────────────────────
+function openFaltasModal() {
+  const allAppts = getAppointments();
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  // "Falta" = 5 horas após o horário agendado, sem conclusão nem cancelamento
+  function getNoShows(startDate, endDate) {
+    return allAppts.filter(a => {
+      if (a.date < startDate || a.date > endDate) return false;
+      return isNoShow(a, now);
+    }).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+  }
+
+  // Period helpers
+  function toStr(d) { return d.toISOString().slice(0, 10); }
+  const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const periods = {
+    day:   { label: 'Hoje',   start: todayStr,           end: todayStr },
+    week:  { label: 'Semana', start: toStr(startOfWeek),  end: todayStr },
+    month: { label: 'Mês',    start: toStr(startOfMonth), end: todayStr },
+  };
+
+  // Initial render with month view
+  let activePeriod = 'month';
+  let customStart = toStr(startOfMonth);
+  let customEnd = todayStr;
+
+  function getCurrentNoShows() {
+    if (activePeriod === 'custom') {
+      return getNoShows(customStart, customEnd);
+    }
+    const p = periods[activePeriod];
+    return getNoShows(p.start, p.end);
+  }
+
+  function getPeriodLabel() {
+    if (activePeriod === 'custom') {
+      return `${formatDate(customStart)} — ${formatDate(customEnd)}`;
+    }
+    return periods[activePeriod].label;
+  }
+
+  function renderModalContent(modal) {
+    const noShows = getCurrentNoShows();
+    const periodLabel = getPeriodLabel();
+
+    // Count unique patients
+    const uniqueIds = new Set(noShows.map(a => a.patientId));
+    const uniquePatients = uniqueIds.size;
+
+    const body = modal.querySelector('.modal-body');
+    body.innerHTML = `
+      <!-- Period Tabs -->
+      <div class="faltas-tabs">
+        ${['day','week','month','custom'].map(key => `
+          <button class="faltas-tab-btn ${activePeriod === key ? 'active' : ''}" data-period="${key}">
+            ${key === 'day' ? icon('calendar', 14) + ' Hoje' : ''}
+            ${key === 'week' ? icon('calendar', 14) + ' Semana' : ''}
+            ${key === 'month' ? icon('calendar', 14) + ' Mês' : ''}
+            ${key === 'custom' ? icon('filter', 14) + ' Período' : ''}
+          </button>
+        `).join('')}
+      </div>
+
+      <!-- Custom Period Picker -->
+      <div class="faltas-custom-range" style="display:${activePeriod === 'custom' ? 'flex' : 'none'}">
+        <div class="faltas-custom-field">
+          <label>De</label>
+          <input type="date" id="faltasStartDate" value="${customStart}" />
+        </div>
+        <div class="faltas-custom-field">
+          <label>Até</label>
+          <input type="date" id="faltasEndDate" value="${customEnd}" max="${todayStr}" />
+        </div>
+        <button class="btn btn-primary btn-sm" id="faltasApplyRange" style="align-self:flex-end;">${icon('search', 14)} Filtrar</button>
+      </div>
+
+      <!-- Summary Bar -->
+      <div class="faltas-summary">
+        <div class="faltas-summary-icon">
+          ${icon('alertCircle', 22)}
+        </div>
+        <div class="faltas-summary-info">
+          <div class="faltas-summary-count">${noShows.length} falta${noShows.length !== 1 ? 's' : ''}</div>
+          <div class="faltas-summary-detail">${uniquePatients} paciente${uniquePatients !== 1 ? 's' : ''} · ${periodLabel}</div>
+        </div>
+      </div>
+
+      <!-- Patient List -->
+      ${noShows.length === 0 ? `
+        <div class="faltas-empty">
+          ${icon('check', 48)}
+          <h4>Nenhuma falta registrada</h4>
+          <p>Todos os pacientes compareceram neste período.</p>
+        </div>
+      ` : `
+        <div class="faltas-patient-list">
+          ${noShows.map(a => {
+            const initials = escapeHTML(a.patientName).split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+            return `
+              <div class="faltas-patient-item">
+                <div class="faltas-patient-avatar">${initials}</div>
+                <div class="faltas-patient-info">
+                  <a href="#/prontuario/${a.patientId}" class="faltas-patient-name">${escapeHTML(a.patientName)}</a>
+                  <div class="faltas-patient-meta">
+                    <span>${icon('calendar', 12)} ${formatDate(a.date)}</span>
+                    <span>${icon('clock', 12)} ${a.time}</span>
+                    <span>${icon('fileText', 12)} ${escapeHTML(a.procedure)}</span>
+                    <span>${icon('user', 12)} ${escapeHTML(a.dentist)}</span>
+                  </div>
+                </div>
+                <div class="faltas-patient-status">
+                  <span class="status-badge status-cancelled" style="font-size:.7rem;">Faltou</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
+    `;
+
+    // Period tab listeners
+    body.querySelectorAll('.faltas-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activePeriod = btn.dataset.period;
+        renderModalContent(modal);
+      });
+    });
+
+    // Custom range listeners
+    const applyBtn = body.querySelector('#faltasApplyRange');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => {
+        customStart = body.querySelector('#faltasStartDate').value;
+        customEnd = body.querySelector('#faltasEndDate').value;
+        if (customStart > customEnd) {
+          toast.error('A data inicial deve ser anterior à data final.');
+          return;
+        }
+        renderModalContent(modal);
+      });
+    }
+
+    // Patient name click → close modal and go to profile
+    body.querySelectorAll('.faltas-patient-name').forEach(link => {
+      link.addEventListener('click', () => closeAllModals());
+    });
+  }
+
+  const modal = openModal({
+    title: 'Faltas — Pacientes Ausentes',
+    size: 'lg',
+    content: '<div></div>',
+    footer: `
+      <button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Fechar</button>
+    `
+  });
+
+  renderModalContent(modal);
+}
+

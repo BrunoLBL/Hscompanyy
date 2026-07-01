@@ -26,3 +26,30 @@ export async function hashPassword(password) {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+/**
+ * Determina se um agendamento é uma "falta" (no-show).
+ * Regra: 5 horas devem ter se passado desde o horário agendado,
+ * e o status NÃO pode ser 'completed' nem 'cancelled'.
+ * @param {Object} appt - Objeto do agendamento com date, time, duration, status
+ * @param {Date} [now] - Data/hora atual (opcional, para testes)
+ * @returns {boolean}
+ */
+export function isNoShow(appt, now = new Date()) {
+  if (!appt || !appt.date) return false;
+  if (appt.status === 'completed' || appt.status === 'cancelled') return false;
+
+  const todayStr = now.toISOString().slice(0, 10);
+  // Future appointments can never be no-shows
+  if (appt.date > todayStr) return false;
+
+  // Build the scheduled datetime
+  const [h, m] = (appt.time || '00:00').split(':').map(Number);
+  const apptDate = new Date(appt.date + 'T00:00:00');
+  apptDate.setHours(h, m, 0, 0);
+
+  // Must have 5 hours elapsed since the scheduled time
+  const fiveHoursMs = 5 * 60 * 60 * 1000;
+  return (now.getTime() - apptDate.getTime()) >= fiveHoursMs;
+}
+

@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge, escapeHTML } from '../utils/helpers.js';
+import { formatCurrency, formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge, escapeHTML, isNoShow } from '../utils/helpers.js';
 import { getPatient, getClinicalRecords, saveClinicalRecord, getPhotos, savePhoto, deletePhoto, getTreatments, saveTreatment, getAppointments, getTransactions, getOdontogram, saveOdontogram, getDocuments, saveDocument, deleteDocument, getData } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { openModal, closeAllModals } from '../components/modal.js';
@@ -316,13 +316,60 @@ function renderFinanceiro(tc, transactions, totalPaid, totalPending) {
 }
 
 function renderAgendamentos(tc, appointments) {
-  tc.innerHTML = `<div class="card">
+  const now = new Date();
+  const totalAppts = appointments.length;
+  const completedAppts = appointments.filter(a => a.status === 'completed').length;
+  const faltasAppts = appointments.filter(a => isNoShow(a, now)).length;
+
+  tc.innerHTML = `
+    <!-- Mini Dashboard -->
+    <div class="patient-appt-dashboard">
+      <div class="patient-appt-dash-card patient-appt-dash-card--total">
+        <div class="patient-appt-dash-icon patient-appt-dash-icon--total">
+          ${icon('calendar', 22)}
+        </div>
+        <div class="patient-appt-dash-data">
+          <div class="patient-appt-dash-count">${totalAppts}</div>
+          <div class="patient-appt-dash-label">Consultas Marcadas</div>
+        </div>
+      </div>
+      <div class="patient-appt-dash-card patient-appt-dash-card--faltas">
+        <div class="patient-appt-dash-icon patient-appt-dash-icon--faltas">
+          ${icon('alertCircle', 22)}
+        </div>
+        <div class="patient-appt-dash-data">
+          <div class="patient-appt-dash-count">${faltasAppts}</div>
+          <div class="patient-appt-dash-label">Faltas</div>
+        </div>
+      </div>
+      <div class="patient-appt-dash-card patient-appt-dash-card--completed">
+        <div class="patient-appt-dash-icon patient-appt-dash-icon--completed">
+          ${icon('check', 22)}
+        </div>
+        <div class="patient-appt-dash-data">
+          <div class="patient-appt-dash-count">${completedAppts}</div>
+          <div class="patient-appt-dash-label">Consultas Realizadas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela de Agendamentos -->
+    <div class="card">
     ${appointments.length === 0 ? '<div class="empty-state"><h3>Nenhum agendamento</h3></div>' : `
     <table class="data-table"><thead><tr><th>Data</th><th>Hora</th><th>Procedimento</th><th>Dentista</th><th>Status</th></tr></thead>
-    <tbody>${appointments.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a => `
-      <tr><td>${formatDate(a.date)}</td><td>${a.time}</td><td>${escapeHTML(a.procedure)}</td><td>${escapeHTML(a.dentist)}</td>
-      <td><span class="status-badge status-${a.status}">${a.status==='confirmed'?'Confirmado':a.status==='completed'?'Concluído':a.status==='cancelled'?'Cancelado':'Pendente'}</span></td></tr>
-    `).join('')}</tbody></table>`}
+    <tbody>${appointments.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a => {
+      const noShow = isNoShow(a, now);
+      const statusLabel = noShow ? 'Faltou' : a.status==='confirmed'?'Confirmado':a.status==='completed'?'Conclu\u00eddo':a.status==='cancelled'?'Cancelado':'Pendente';
+      const statusClass = noShow ? 'cancelled' : a.status;
+      return `
+      <tr>
+        <td>${formatDate(a.date)}</td>
+        <td>${a.time}</td>
+        <td>${escapeHTML(a.procedure)}</td>
+        <td>${escapeHTML(a.dentist)}</td>
+        <td><span class="status-badge status-${statusClass}">${statusLabel}</span></td>
+      </tr>`;
+    }).join('')}</tbody></table>`}
   </div>`;
 }
 

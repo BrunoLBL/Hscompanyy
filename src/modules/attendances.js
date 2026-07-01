@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, escapeHTML } from '../utils/helpers.js';
+import { formatDate, escapeHTML, isNoShow } from '../utils/helpers.js';
 import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess, savePatient } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -158,7 +158,7 @@ function openDashboardPopup(title, appointments, statusKey) {
                   <span>${icon('user', 12)} ${escapeHTML(a.dentist)}</span>
                 </div>
               </div>
-              <span class="status-badge status-${a.status}" style="font-size:.7rem;flex-shrink:0;">${sc.label}</span>
+              ${isNoShow(a, new Date()) ? `<span class="status-badge status-cancelled" style="font-size:.7rem;flex-shrink:0;">Faltou</span>` : `<span class="status-badge status-${a.status}" style="font-size:.7rem;flex-shrink:0;">${sc.label}</span>`}
             </div>
           `).join('')}
         </div>
