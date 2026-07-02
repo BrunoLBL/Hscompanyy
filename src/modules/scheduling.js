@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, isToday, generateId, escapeHTML, isNoShow } from '../utils/helpers.js';
+import { formatDate, isToday, generateId, escapeHTML, isNoShow, localDateStr } from '../utils/helpers.js';
 import { getAppointments, saveAppointment, deleteAppointment, getPatients, getData, completeAppointmentProcess } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -243,7 +243,7 @@ function openApptDetail(appt, parentContainer) {
 function openApptForm(defaults = {}, parentContainer) {
   const patients = getPatients().filter(p => p.status === 'active');
   const procedures = ['Avaliação','Limpeza','Restauração','Extração','Canal','Clareamento','Implante','Ortodontia','Prótese','Raio-X','Manutenção','Harmonização','Outro'];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const dentists = getData().settings?.dentists || [];
 
   const modal = openModal({
@@ -368,7 +368,7 @@ function openDateSelectionModal(parentContainer) {
         <h3 style="font-weight: 600; text-align: center; margin: 0; font-size: 1.25rem;">Para qual dia deseja agendar?</h3>
         
         <div style="width: 100%; max-width: 320px; margin-top: 10px;">
-          <input type="date" id="selectedDateInput" value="${today.toISOString().slice(0, 10)}" 
+          <input type="date" id="selectedDateInput" value="${localDateStr(today)}" 
             style="width: 100%; padding: 16px; border-radius: 12px; border: 2px solid var(--primary); font-size: 1.2rem; font-weight: 600; text-align: center; color: var(--text-main); outline: none; box-shadow: 0 2px 10px rgba(0,0,0,0.05); cursor: pointer;"
           />
         </div>
@@ -392,7 +392,7 @@ function openDateSelectionModal(parentContainer) {
     btn.onclick = () => {
       const targetDate = new Date();
       targetDate.setDate(today.getDate() + parseInt(btn.dataset.days));
-      dateInput.value = targetDate.toISOString().slice(0, 10);
+      dateInput.value = localDateStr(targetDate);
     };
   });
 
@@ -411,7 +411,7 @@ function openDateSelectionModal(parentContainer) {
 function openFaltasModal() {
   const allAppts = getAppointments();
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = localDateStr(now);
 
   // "Falta" = 5 horas após o horário agendado, sem conclusão nem cancelamento
   function getNoShows(startDate, endDate) {
@@ -422,7 +422,7 @@ function openFaltasModal() {
   }
 
   // Period helpers
-  function toStr(d) { return d.toISOString().slice(0, 10); }
+  function toStr(d) { return localDateStr(d); }
   const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 

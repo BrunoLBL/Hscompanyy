@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, escapeHTML, isNoShow } from '../utils/helpers.js';
+import { formatDate, escapeHTML, isNoShow, localDateStr } from '../utils/helpers.js';
 import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess, savePatient } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -8,7 +8,7 @@ export function renderAttendances(container) {
   const attendances = getAttendances();
 
   // ─── Dashboard do Dia: agendamentos de hoje por status ───
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   const todayAppts = getAppointments().filter(a => a.date === todayStr);
   const confirmedAppts = todayAppts.filter(a => a.status === 'confirmed');
   const pendingAppts = todayAppts.filter(a => a.status === 'pending');
@@ -180,7 +180,7 @@ function openDashboardPopup(title, appointments, statusKey) {
 function openNewAttendanceModal(parentContainer) {
   const patients = getPatients().filter(p => p.status === 'active');
   const procedures = ['Avaliação', 'Limpeza', 'Restauração', 'Extração', 'Canal', 'Clareamento', 'Implante', 'Ortodontia', 'Prótese', 'Raio-X', 'Manutenção', 'Harmonização', 'Outro'];
-  const todayAppts = getAppointments().filter(a => a.date === new Date().toISOString().slice(0, 10) && !['completed', 'cancelled'].includes(a.status));
+  const todayAppts = getAppointments().filter(a => a.date === localDateStr() && !['completed', 'cancelled'].includes(a.status));
   const dentists = getData().settings?.dentists || [];
 
   const modal = openModal({
