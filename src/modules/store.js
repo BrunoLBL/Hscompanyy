@@ -48,7 +48,7 @@ async function loadFromSupabase() {
 
 // ─── Deep Merge Multi-Usuário ────────────────────────────
 // Coleções que são arrays de objetos com campo 'id'
-const COLLECTIONS = ['patients', 'appointments', 'transactions', 'inventory', 'attendances', 'clinicalRecords', 'treatments', 'photos', 'documents', 'inventoryNotifications', 'systemLogs'];
+const COLLECTIONS = ['patients', 'appointments', 'transactions', 'inventory', 'attendances', 'cancelledAttendances', 'clinicalRecords', 'treatments', 'photos', 'documents', 'inventoryNotifications', 'systemLogs'];
 
 function getRecordTimestamp(item) {
   const ts = item.updatedAt || item.createdAt || item.date || item.startDate;
@@ -687,6 +687,20 @@ export function completeAttendanceProcess(id, durationSeconds = 0) {
 
   deleteAttendance(id);
   return true;
+}
+
+// ─── Atendimentos Cancelados ─────────────────────────────
+export function getCancelledAttendances() { return getData().cancelledAttendances || []; }
+export function saveCancelledAttendance(ca) {
+  const d = getData();
+  if (!d.cancelledAttendances) d.cancelledAttendances = [];
+  ca.id = ca.id || generateId();
+  ca.cancelledAt = ca.cancelledAt || new Date().toISOString();
+  ca.updatedAt = new Date().toISOString();
+  ca.createdAt = ca.updatedAt;
+  d.cancelledAttendances.push(ca);
+  saveAll(d);
+  return ca;
 }
 
 // ─── Prontuário Clínico ──────────────────────────────────

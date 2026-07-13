@@ -1,6 +1,6 @@
 import { icon } from '../utils/icons.js';
 import { formatDate, escapeHTML, isNoShow } from '../utils/helpers.js';
-import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess, savePatient } from './store.js';
+import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess, savePatient, deleteAttendance, getCancelledAttendances, saveCancelledAttendance } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 
@@ -19,7 +19,10 @@ export function renderAttendances(container) {
   container.innerHTML = `
     <div class="page-title-bar">
       <div><h2>Atendimentos em Aberto</h2><p>Gerencie os pacientes aguardando ou em atendimento na clínica</p></div>
-      <button class="btn btn-primary" id="newAttendanceBtn">${icon('plus', 16)} Iniciar Atendimento</button>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="btn btn-secondary" id="viewCancelledBtn">${icon('xCircle', 16)} Cancelados</button>
+        <button class="btn btn-primary" id="newAttendanceBtn">${icon('plus', 16)} Iniciar Atendimento</button>
+      </div>
     </div>
 
     <!-- ─── Dashboard do Dia ─── -->
@@ -88,6 +91,7 @@ export function renderAttendances(container) {
           </div>
           <div style="margin-top:auto; display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border-color);">
              <button class="btn btn-secondary btn-sm" onclick="location.hash='#/prontuario/${a.patientId}'">${icon('eye', 14)} Prontuário</button>
+             <button class="btn btn-danger btn-sm cancel-att-btn" data-id="${a.id}">${icon('xCircle', 14)} Cancelar</button>
              <button class="btn btn-primary btn-sm finish-btn" style="flex:1" data-id="${a.id}">${icon('check', 14)} Concluir</button>
           </div>
         </div>
@@ -108,12 +112,246 @@ export function renderAttendances(container) {
 
   container.querySelector('#newAttendanceBtn').addEventListener('click', () => openNewAttendanceModal(container));
 
+  // ─── Botão Cancelados ───
+  container.querySelector('#viewCancelledBtn').addEventListener('click', () => openCancelledAttendancesModal());
+
   container.querySelectorAll('.finish-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const id = e.currentTarget.dataset.id;
       finishAttendance(id, container);
     });
   });
+
+  // ─── Botões Cancelar Atendimento ───
+  container.querySelectorAll('.cancel-att-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = e.currentTarget.dataset.id;
+      openCancelAttendanceModal(id, container);
+    });
+  });
+}
+
+// ─── Modal de Cancelar Atendimento (com motivo) ───
+function openCancelAttendanceModal(attendanceId, parentContainer) {
+  const attendance = getAttendances().find(a => a.id === attendanceId);
+  if (!attendance) return;
+
+  const modal = openModal({
+    title: 'Cancelar Atendimento',
+    content: `
+      <div class="cancel-att-modal">
+        <div class="cancel-att-warning">
+          <div class="cancel-att-warning-icon">${icon('alertCircle', 28)}</div>
+          <div>
+            <h4>Tem certeza que deseja cancelar?</h4>
+            <p>O atendimento de <strong>${escapeHTML(attendance.patientName)}</strong> será cancelado e removido da lista de atendimentos em aberto.</p>
+          </div>
+        </div>
+        <div class="cancel-att-details">
+          <div class="cancel-att-detail-item">
+            <span class="cancel-att-detail-label">${icon('user', 14)} Paciente</span>
+            <span class="cancel-att-detail-value">${escapeHTML(attendance.patientName)}</span>
+          </div>
+          <div class="cancel-att-detail-item">
+            <span class="cancel-att-detail-label">${icon('fileText', 14)} Procedimento</span>
+            <span class="cancel-att-detail-value">${escapeHTML(attendance.procedure)}</span>
+          </div>
+          <div class="cancel-att-detail-item">
+            <span class="cancel-att-detail-label">${icon('clock', 14)} Iniciado às</span>
+            <span class="cancel-att-detail-value">${new Date(attendance.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:16px;">
+          <label style="font-weight:600;margin-bottom:6px;display:block;">Motivo do Cancelamento *</label>
+          <textarea id="cancelReason" rows="3" placeholder="Informe o motivo do cancelamento..." style="width:100%;resize:vertical;min-height:80px;"></textarea>
+        </div>
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary" id="cancelModalCloseBtn">Voltar</button>
+      <button class="btn btn-danger" id="confirmCancelBtn">${icon('xCircle', 16)} Confirmar Cancelamento</button>
+    `
+  });
+
+  modal.querySelector('#cancelModalCloseBtn').addEventListener('click', () => {
+    closeAllModals();
+  });
+
+  modal.querySelector('#confirmCancelBtn').addEventListener('click', () => {
+    const reason = modal.querySelector('#cancelReason').value.trim();
+    if (!reason) {
+      toast.error('Informe o motivo do cancelamento.');
+      modal.querySelector('#cancelReason').focus();
+      return;
+    }
+
+    // Save the cancelled attendance record
+    saveCancelledAttendance({
+      patientId: attendance.patientId,
+      patientName: attendance.patientName,
+      procedure: attendance.procedure,
+      value: attendance.value,
+      dentist: attendance.dentist,
+      originalStartedAt: attendance.createdAt,
+      reason: reason
+    });
+
+    // Remove from active attendances
+    deleteAttendance(attendanceId);
+
+    closeAllModals();
+    toast.success('Atendimento cancelado com sucesso.');
+    renderAttendances(parentContainer);
+  });
+}
+
+// ─── Modal de Pacientes Cancelados ───
+function openCancelledAttendancesModal() {
+  const allCancelled = getCancelledAttendances();
+  
+  const modal = openModal({
+    title: 'Atendimentos Cancelados',
+    size: 'lg',
+    content: `
+      <div class="cancelled-att-viewer">
+        <!-- Filtro por período -->
+        <div class="cancelled-att-filters">
+          <div class="cancelled-att-filter-tabs">
+            <button class="cancelled-att-filter-tab active" data-filter="today">Hoje</button>
+            <button class="cancelled-att-filter-tab" data-filter="week">Semana</button>
+            <button class="cancelled-att-filter-tab" data-filter="month">Mês</button>
+            <button class="cancelled-att-filter-tab" data-filter="custom">Dia Específico</button>
+          </div>
+          <div class="cancelled-att-date-picker" id="customDatePicker" style="display:none;">
+            <input type="date" id="cancelledDateInput" class="cancelled-att-date-input" />
+            <button class="btn btn-primary btn-sm" id="applyDateFilterBtn">${icon('search', 14)} Buscar</button>
+          </div>
+        </div>
+        <!-- Lista de cancelados -->
+        <div id="cancelledList" class="cancelled-att-list">
+          ${renderCancelledList(allCancelled, 'today')}
+        </div>
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Fechar</button>
+    `
+  });
+
+  let currentFilter = 'today';
+
+  // Filter tab clicks
+  modal.querySelectorAll('.cancelled-att-filter-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      modal.querySelectorAll('.cancelled-att-filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentFilter = tab.dataset.filter;
+
+      const datePicker = modal.querySelector('#customDatePicker');
+      if (currentFilter === 'custom') {
+        datePicker.style.display = 'flex';
+      } else {
+        datePicker.style.display = 'none';
+        modal.querySelector('#cancelledList').innerHTML = renderCancelledList(allCancelled, currentFilter);
+      }
+    });
+  });
+
+  // Custom date filter
+  modal.querySelector('#applyDateFilterBtn')?.addEventListener('click', () => {
+    const dateVal = modal.querySelector('#cancelledDateInput').value;
+    if (!dateVal) {
+      toast.error('Selecione uma data.');
+      return;
+    }
+    modal.querySelector('#cancelledList').innerHTML = renderCancelledList(allCancelled, 'custom', dateVal);
+  });
+}
+
+function filterCancelledByPeriod(items, period, customDate) {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  switch (period) {
+    case 'today':
+      return items.filter(c => (c.cancelledAt || c.createdAt || '').slice(0, 10) === todayStr);
+
+    case 'week': {
+      const startOfWeek = new Date(now);
+      const dayOfWeek = startOfWeek.getDay();
+      startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
+      startOfWeek.setHours(0, 0, 0, 0);
+      return items.filter(c => {
+        const d = new Date(c.cancelledAt || c.createdAt);
+        return d >= startOfWeek && d <= now;
+      });
+    }
+
+    case 'month': {
+      const monthStr = todayStr.slice(0, 7);
+      return items.filter(c => (c.cancelledAt || c.createdAt || '').slice(0, 7) === monthStr);
+    }
+
+    case 'custom':
+      if (!customDate) return [];
+      return items.filter(c => (c.cancelledAt || c.createdAt || '').slice(0, 10) === customDate);
+
+    default:
+      return items;
+  }
+}
+
+function renderCancelledList(allCancelled, period, customDate) {
+  const filtered = filterCancelledByPeriod(allCancelled, period, customDate);
+
+  if (filtered.length === 0) {
+    const periodLabels = {
+      today: 'hoje',
+      week: 'nesta semana',
+      month: 'neste mês',
+      custom: customDate ? `em ${customDate.split('-').reverse().join('/')}` : 'neste período'
+    };
+    return `
+      <div class="cancelled-att-empty">
+        ${icon('check', 40)}
+        <h4>Nenhum cancelamento ${periodLabels[period] || ''}</h4>
+        <p>Não há atendimentos cancelados para o período selecionado.</p>
+      </div>
+    `;
+  }
+
+  // Sort by most recent first
+  const sorted = [...filtered].sort((a, b) => new Date(b.cancelledAt || b.createdAt) - new Date(a.cancelledAt || a.createdAt));
+
+  return `
+    <div class="cancelled-att-count">
+      <span class="cancelled-att-count-badge">${sorted.length}</span>
+      cancelamento${sorted.length !== 1 ? 's' : ''} encontrado${sorted.length !== 1 ? 's' : ''}
+    </div>
+    ${sorted.map(c => `
+      <div class="cancelled-att-item">
+        <div class="cancelled-att-item-header">
+          <div class="cancelled-att-item-avatar">${escapeHTML(c.patientName).charAt(0).toUpperCase()}</div>
+          <div class="cancelled-att-item-info">
+            <div class="cancelled-att-item-name">${escapeHTML(c.patientName)}</div>
+            <div class="cancelled-att-item-meta">
+              <span>${icon('fileText', 12)} ${escapeHTML(c.procedure)}</span>
+              <span>${icon('user', 12)} ${escapeHTML(c.dentist || 'Recepção')}</span>
+              <span>${icon('dollar', 12)} R$ ${Number(c.value || 0).toFixed(2).replace('.', ',')}</span>
+            </div>
+          </div>
+          <div class="cancelled-att-item-time">
+            <div class="cancelled-att-item-date">${new Date(c.cancelledAt || c.createdAt).toLocaleDateString('pt-BR')}</div>
+            <div class="cancelled-att-item-hour">${new Date(c.cancelledAt || c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </div>
+        <div class="cancelled-att-item-reason">
+          <div class="cancelled-att-reason-label">${icon('messageCircle', 14)} Motivo:</div>
+          <div class="cancelled-att-reason-text">${escapeHTML(c.reason)}</div>
+        </div>
+      </div>
+    `).join('')}
+  `;
 }
 
 // ─── Popup do Dashboard: lista de pacientes por status ───
