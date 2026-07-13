@@ -28,6 +28,19 @@ export async function hashPassword(password) {
 }
 
 /**
+ * Retorna a data LOCAL no formato YYYY-MM-DD.
+ * Diferente de toISOString().slice(0,10) que retorna UTC.
+ * @param {Date} [date] - Data (padrão: agora)
+ * @returns {string} Ex: "2026-07-01"
+ */
+export function localDateStr(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Determina se um agendamento é uma "falta" (no-show).
  * Regra: 5 horas devem ter se passado desde o horário agendado,
  * e o status NÃO pode ser 'completed' nem 'cancelled'.
@@ -39,11 +52,11 @@ export function isNoShow(appt, now = new Date()) {
   if (!appt || !appt.date) return false;
   if (appt.status === 'completed' || appt.status === 'cancelled') return false;
 
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = localDateStr(now);
   // Future appointments can never be no-shows
   if (appt.date > todayStr) return false;
 
-  // Build the scheduled datetime
+  // Build the scheduled datetime (local timezone)
   const [h, m] = (appt.time || '00:00').split(':').map(Number);
   const apptDate = new Date(appt.date + 'T00:00:00');
   apptDate.setHours(h, m, 0, 0);
@@ -52,4 +65,3 @@ export function isNoShow(appt, now = new Date()) {
   const fiveHoursMs = 5 * 60 * 60 * 1000;
   return (now.getTime() - apptDate.getTime()) >= fiveHoursMs;
 }
-
