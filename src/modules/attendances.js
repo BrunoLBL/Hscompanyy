@@ -89,10 +89,10 @@ export function renderAttendances(container) {
             <div style="display:flex; align-items:center; gap:6px;">${icon('fileText', 14)} ${escapeHTML(a.procedure)}</div>
             <div style="display:flex; align-items:center; gap:6px;">${icon('dollar', 14)} R$ ${Number(a.value).toFixed(2).replace('.', ',')}</div>
           </div>
-          <div style="margin-top:auto; display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border-color);">
+          <div style="margin-top:auto; display:flex; flex-wrap:wrap; gap:8px; padding-top:12px; border-top:1px solid var(--border-color);">
              <button class="btn btn-secondary btn-sm" onclick="location.hash='#/prontuario/${a.patientId}'">${icon('eye', 14)} Prontuário</button>
              <button class="btn btn-danger btn-sm cancel-att-btn" data-id="${a.id}">${icon('xCircle', 14)} Cancelar</button>
-             <button class="btn btn-primary btn-sm finish-btn" style="flex:1" data-id="${a.id}">${icon('check', 14)} Concluir</button>
+             <button class="btn btn-primary btn-sm finish-btn" style="flex:1 1 100%" data-id="${a.id}">${icon('check', 14)} Concluir</button>
           </div>
         </div>
       `).join('')}
