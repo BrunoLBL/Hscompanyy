@@ -15,7 +15,7 @@ export function renderHeader() {
 
   header.innerHTML = `
     <div class="header-left">
-      <button class="header-btn mobile-menu-btn" id="mobileMenuBtn" style="display:none">${icon('menu')}</button>
+      <button class="header-btn mobile-menu-btn" id="mobileMenuBtn">${icon('menu')}</button>
       <div class="header-search">
         ${icon('search',18)}
         <input type="text" id="globalSearch" placeholder="Buscar pacientes, procedimentos..." autocomplete="off"/>
@@ -88,11 +88,37 @@ export function renderHeader() {
     if (!e.target.closest('.header-search')) searchResults.classList.remove('visible');
   });
 
-  // Mobile menu
+  // Mobile menu with backdrop overlay
   const menuBtn = document.getElementById('mobileMenuBtn');
-  if (window.innerWidth <= 768) menuBtn.style.display = 'flex';
+  const sidebar = document.getElementById('sidebar');
+
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    const bd = document.querySelector('.sidebar-backdrop');
+    if (bd) bd.remove();
+  }
+
   menuBtn.addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('open');
+    const isOpen = sidebar.classList.toggle('open');
+    if (isOpen) {
+      // Create backdrop
+      let bd = document.querySelector('.sidebar-backdrop');
+      if (!bd) {
+        bd = document.createElement('div');
+        bd.className = 'sidebar-backdrop active';
+        document.body.appendChild(bd);
+        bd.addEventListener('click', closeSidebar);
+      }
+    } else {
+      closeSidebar();
+    }
+  });
+
+  // Close sidebar when clicking a nav item (mobile UX)
+  sidebar.addEventListener('click', (e) => {
+    if (e.target.closest('.nav-item') && window.innerWidth <= 768) {
+      closeSidebar();
+    }
   });
 
   // Profile dropdown toggle

@@ -244,6 +244,9 @@ cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(
 }
 .profile-pwd-back:hover { color: var(--primary); }
 
+/* ─── Mobile Menu Button: hidden on desktop ─── */
+.mobile-menu-btn { display: none; }
+
 @media(max-width:1024px){
 :root{--sidebar-w:72px}
 .sidebar-logo h1,.sidebar-logo span,.nav-section-title,.nav-item span{display:none}
@@ -252,14 +255,161 @@ cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(
 .charts-grid{grid-template-columns:1fr}
 }
 @media(max-width:768px){
-#sidebar{position:fixed;left:-280px;width:280px;min-width:280px;height:100vh;transition:transform .3s ease}
-#sidebar.open{transform:translateX(280px)}
+/* ─ Sidebar: off-canvas drawer ─ */
+#sidebar{position:fixed;left:0;top:0;width:280px;min-width:280px;height:100vh;height:100dvh;
+  transform:translateX(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1);z-index:1000}
+#sidebar.open{transform:translateX(0)}
 .sidebar-logo h1,.sidebar-logo span,.nav-section-title,.nav-item span{display:block}
 .nav-item{justify-content:flex-start}
-.header-search input{width:200px}
+
+/* ─ Mobile menu button visible ─ */
+.mobile-menu-btn{display:flex !important}
+
+/* ─ Header ─ */
+#top-header{height:56px;padding:0 12px}
+.header-search input{width:160px;padding:8px 12px 8px 36px;font-size:.8rem}
+.header-search svg{left:10px}
+.header-user-info{display:none}
+.header-user{padding:6px;margin-left:4px}
+
+/* ─ Page Content ─ */
+#page-content{padding:16px}
+
+/* ─ Page Title Bar ─ */
+.page-title-bar{flex-direction:column;align-items:flex-start;gap:12px}
+.page-title-bar h2{font-size:1.3rem}
+.page-title-bar > div:last-child{width:100%;display:flex;flex-wrap:wrap;gap:8px}
+
+/* ─ Grid Layouts ─ */
 .form-row{grid-template-columns:1fr}
 .kpi-grid{grid-template-columns:1fr 1fr}
 .financial-summary{grid-template-columns:1fr}
+.charts-grid{grid-template-columns:1fr}
+
+/* ─ Tables: horizontal scroll wrapper ─ */
+.card:has(.data-table){overflow-x:auto;-webkit-overflow-scrolling:touch}
+.data-table{min-width:650px}
+
+/* ─ Calendar ─ */
+.calendar-cell{min-height:60px;padding:4px}
+.calendar-cell .day-num{font-size:.72rem}
+.cal-event{font-size:.6rem;padding:2px 4px}
+.calendar-header-cell{padding:8px 4px;font-size:.65rem}
+
+/* ─ List Header ─ */
+.list-header{flex-direction:column;align-items:flex-start;gap:10px}
+.filter-group{flex-wrap:wrap;width:100%;gap:8px}
+.filter-group select,.filter-group input{flex:1;min-width:0}
+
+/* ─ Tabs ─ */
+.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;gap:0}
+.tab-btn{white-space:nowrap;flex-shrink:0;padding:10px 14px;font-size:.8rem}
+
+/* ─ Modal ─ */
+.modal-box{width:96%;max-width:96%;margin:8px auto;max-height:90vh;max-height:90dvh;border-radius:var(--radius)}
+.modal-box.lg{max-width:96%}
+.modal-header{padding:16px}
+.modal-header h3{font-size:1rem}
+.modal-body{padding:16px}
+.modal-footer{padding:12px 16px;flex-wrap:wrap;gap:8px}
+.modal-footer .btn{flex:1;min-width:0;justify-content:center}
+
+/* ─ Buttons ─ */
+.btn{padding:9px 14px;font-size:.8rem}
+.btn-sm{padding:7px 10px;font-size:.75rem}
+
+/* ─ Toast ─ */
+.toast-container{right:8px;left:8px;top:12px}
+.toast{min-width:auto;width:100%;font-size:.8rem;padding:12px 14px}
+
+/* ─ Login ─ */
+.login-card{padding:32px 20px;max-width:92%;margin:0 16px}
+.login-title{font-size:1.5rem}
+.login-subtitle{font-size:.8rem;margin-bottom:24px}
+.login-input{padding:11px 14px;font-size:.85rem}
+.login-btn{padding:13px 20px;font-size:.9rem}
+
+/* ─ KPI Cards ─ */
+.kpi-card{padding:16px;gap:12px}
+.kpi-icon{width:40px;height:40px}
+.kpi-info h3{font-size:1.3rem}
+.kpi-info span{font-size:.72rem}
+.kpi-info .kpi-trend{font-size:.7rem}
+
+/* ─ Financial Cards ─ */
+.fin-card{padding:16px}
+.fin-card h3{font-size:1.4rem}
+.fin-card span{font-size:.75rem}
+
+/* ─ Attendance Dashboard Cards ─ */
+.att-dashboard-section{padding:16px}
+.att-dashboard-header{flex-direction:column;align-items:flex-start;gap:8px}
+.att-dash-card{padding:20px 14px 16px}
+.att-dash-card__count{font-size:2rem}
+.att-dash-card__label{font-size:.8rem}
+.att-dash-card__icon-ring{width:48px;height:48px}
+
+/* ─ Profile Dropdown ─ */
+.profile-dropdown{width:260px;right:-40px}
+
+/* ─ Patient Avatar (tables) ─ */
+.patient-avatar{width:36px;height:36px;font-size:.75rem}
+
+/* ─ Action Cells ─ */
+.action-cell{gap:4px}
+.action-cell button{width:28px;height:28px}
+
+/* ─ Pagination ─ */
+.pagination{flex-wrap:wrap}
+.pagination button{width:32px;height:32px;font-size:.75rem}
+
+/* ─ Photo Grid ─ */
+.photo-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+
+/* ─ Odontogram ─ */
+.odontogram-wrap{padding:10px}
+.odontogram-row{gap:3px}
+
+/* ─ Timeline ─ */
+.timeline{padding-left:22px}
+
+/* ─ Faltas Custom Range ─ */
+.faltas-custom-range{flex-direction:column;align-items:stretch}
+.faltas-custom-range .btn{align-self:flex-end}
+
+/* ─ Faltas Tabs ─ */
+.faltas-tabs{flex-wrap:wrap}
+.faltas-tab-btn{flex:1 1 45%;min-width:0;font-size:.75rem;padding:8px 10px}
+
+/* ─ Cancelled Attendance ─ */
+.cancelled-att-filter-tabs{flex-wrap:wrap}
+.cancelled-att-date-picker{flex-wrap:wrap}
+
+/* ─ Patient Appointment Dashboard ─ */
+.patient-appt-dashboard{grid-template-columns:1fr}
+.patient-appt-dash-card{padding:14px}
+.patient-appt-dash-count{font-size:1.4rem}
+
+/* ─ Documents Grid ─ */
+.doc-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+
+/* ─ Dentist Inventory ─ */
+.dentist-inv-grid{grid-template-columns:1fr 1fr;gap:10px}
+
+/* ─ Inline grid overrides (used in JS templates) ─ */
+[style*="grid-template-columns: 1fr 1fr"],[style*="grid-template-columns:1fr 1fr"]{
+  grid-template-columns:1fr !important}
+[style*="grid-template-columns: 2fr 1fr"],[style*="grid-template-columns:2fr 1fr"]{
+  grid-template-columns:1fr !important}
+[style*="minmax(300px"],[style*="minmax(280px"]{
+  grid-template-columns:1fr !important}
+[style*="minmax(250px"]{
+  grid-template-columns:1fr !important}
+
+/* ─ Sidebar backdrop overlay ─ */
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;
+  animation:fadeIn .2s ease}
+.sidebar-backdrop.active{display:block}
 }
 
 /* ─── Login Screen ────────────────────────────────────────── */
@@ -1212,4 +1362,132 @@ cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(
 @keyframes fadeSlideDown {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE: Small phones (≤480px)
+   ═══════════════════════════════════════════════════════════════ */
+@media(max-width:480px){
+  /* KPI single column */
+  .kpi-grid{grid-template-columns:1fr}
+  .kpi-card{padding:14px;gap:10px}
+  .kpi-icon{width:36px;height:36px}
+  .kpi-icon svg{width:18px;height:18px}
+  .kpi-info h3{font-size:1.1rem}
+  .kpi-info span{font-size:.68rem}
+
+  /* Financial */
+  .fin-card h3{font-size:1.2rem}
+  .fin-card{padding:14px}
+
+  /* Calendar cells smaller */
+  .calendar-cell{min-height:50px;padding:3px}
+  .calendar-cell .day-num{font-size:.65rem}
+  .cal-event{font-size:.55rem;padding:1px 3px}
+  .calendar-header-cell{padding:6px 2px;font-size:.6rem;letter-spacing:0}
+
+  /* Header search full width */
+  .header-search{flex:1}
+  .header-search input{width:100%;font-size:.78rem}
+
+  /* Page content tighter */
+  #page-content{padding:12px}
+  .page-title-bar h2{font-size:1.15rem}
+  .page-title-bar p{font-size:.75rem}
+
+  /* Buttons smaller */
+  .btn{padding:8px 12px;font-size:.75rem;gap:6px}
+  .btn-sm{padding:6px 8px;font-size:.72rem}
+  .btn-icon{width:32px;height:32px}
+
+  /* Attendance dashboard */
+  .att-dashboard-cards{grid-template-columns:1fr}
+  .att-dash-card{flex-direction:row;text-align:left;padding:14px;gap:12px}
+  .att-dash-card__icon-ring{width:42px;height:42px;margin-bottom:0;flex-shrink:0}
+  .att-dash-card__count{font-size:1.6rem;margin-bottom:0}
+  .att-dash-card__label{font-size:.78rem}
+  .att-dash-card::before{height:3px}
+
+  /* Cards grid single column */
+  .att-dashboard-section{padding:12px}
+  .att-dashboard-header-left{gap:10px}
+  .att-dashboard-icon-wrap{width:36px;height:36px}
+  .att-dashboard-title{font-size:1rem}
+  .att-dashboard-subtitle{font-size:.75rem}
+
+  /* Faltas */
+  .faltas-tab-btn{flex:1 1 100%;font-size:.78rem}
+  .faltas-summary{flex-direction:column;text-align:center;gap:8px;padding:12px}
+  .faltas-summary-icon{margin:0 auto}
+  .faltas-patient-item{padding:10px 12px;gap:10px}
+  .faltas-patient-avatar{width:36px;height:36px;font-size:.78rem}
+  .faltas-patient-name{font-size:.85rem}
+  .faltas-patient-meta span{font-size:.68rem}
+
+  /* Login */
+  .login-card{padding:24px 16px}
+  .login-title{font-size:1.3rem}
+  .login-field{margin-bottom:16px}
+  .login-btn{padding:12px 16px;font-size:.85rem}
+  .login-orb-1{width:250px;height:250px}
+  .login-orb-2{width:180px;height:180px}
+  .login-orb-3{width:120px;height:120px}
+
+  /* Dentist inventory */
+  .dentist-inv-grid{grid-template-columns:1fr}
+  .dentist-inv-card{padding:14px;gap:8px}
+  .dentist-inv-card-name{font-size:.85rem;min-height:auto}
+  .dentist-inv-card-qty-num{font-size:1.6rem}
+
+  /* Chart canvas */
+  .chart-canvas-wrap{height:220px}
+
+  /* Modal tighter */
+  .modal-box{border-radius:12px}
+  .modal-header h3{font-size:.92rem}
+
+  /* Patient appointment dashboard */
+  .patient-appt-dash-card{padding:12px;gap:10px}
+  .patient-appt-dash-icon{width:38px;height:38px}
+  .patient-appt-dash-count{font-size:1.2rem}
+  .patient-appt-dash-label{font-size:.75rem}
+
+  /* Document grid */
+  .doc-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .doc-card-preview{height:90px}
+  .doc-card-name{font-size:.72rem}
+
+  /* Profile dropdown - center on small screens */
+  .profile-dropdown{width:240px;right:-60px}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE: Touch improvements & safe areas
+   ═══════════════════════════════════════════════════════════════ */
+@media(max-width:768px){
+  /* Ensure touch targets are minimum 44px */
+  .nav-item{min-height:44px}
+  .action-cell button{min-width:36px;min-height:36px}
+  .tab-btn{min-height:44px}
+  .pagination button{min-width:36px;min-height:36px}
+
+  /* Safe area padding for notched devices */
+  #top-header{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  #page-content{padding-bottom:max(16px,env(safe-area-inset-bottom))}
+
+  /* Prevent horizontal overflow */
+  #main-wrapper{overflow-x:hidden}
+  #page-content{overflow-x:hidden}
+
+  /* Smooth scrolling for content */
+  #page-content{-webkit-overflow-scrolling:touch}
+
+  /* Search results dropdown */
+  .search-results{max-height:250px}
+
+  /* Card hover effects disabled on touch */
+  .card:hover{box-shadow:var(--shadow-sm)}
+  .att-dash-card:hover{transform:none}
+  .dentist-inv-card:hover{transform:none;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  .doc-card:hover{transform:none}
 }
