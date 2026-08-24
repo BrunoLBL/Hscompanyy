@@ -318,14 +318,63 @@ function openTransactionForm(type, parentContainer) {
     const patientEl = modal.querySelector('#txPatient');
     const patientId = patientEl ? patientEl.value : null;
     const patient = patientId ? patients.find(p => p.id === patientId) : null;
-    saveTransaction({
-      type, amount, date: modal.querySelector('#txDate').value,
-      description: modal.querySelector('#txDesc').value || (type === 'income' ? 'Receita' : 'Despesa'),
-      category: modal.querySelector('#txCat').value,
-      method: modal.querySelector('#txMethod').value,
-      patientId, patientName: patient ? patient.name : null,
-      status: modal.querySelector('#txStatus').value
-    });
-    closeAllModals(); toast.success('Lançamento salvo!'); renderFinancial(parentContainer);
+
+    const doSave = () => {
+      saveTransaction({
+        type, amount, date: modal.querySelector('#txDate').value,
+        description: modal.querySelector('#txDesc').value || (type === 'income' ? 'Receita' : 'Despesa'),
+        category: modal.querySelector('#txCat').value,
+        method: modal.querySelector('#txMethod').value,
+        patientId, patientName: patient ? patient.name : null,
+        status: modal.querySelector('#txStatus').value
+      });
+      closeAllModals(); toast.success('Lançamento salvo!'); renderFinancial(parentContainer);
+    };
+
+    // Check for pending transactions when saving an income linked to a patient
+    if (type === 'income' && patientId && patient) {
+      const allTransactions = getTransactions();
+      const pendingTx = allTransactions.filter(t => t.patientId === patientId && t.status === 'pending');
+
+      if (pendingTx.length > 0) {
+        const pendingTotal = pendingTx.reduce((sum, t) => sum + (t.amount || 0), 0);
+        const confirmModal = openModal({
+          title: '⚠️ Pendência Encontrada',
+          content: `
+            <div style="text-align:center;padding:8px 0;">
+              <div style="width:64px;height:64px;border-radius:50%;background:rgba(245,166,35,0.12);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#F5A623" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <h4 style="margin:0 0 8px;font-size:1.1rem;font-weight:600;color:var(--text);">Paciente com Receita Pendente</h4>
+              <p style="color:var(--text-secondary);margin:0 0 16px;font-size:.92rem;line-height:1.5;">
+                O paciente <strong style="color:var(--text)">${escapeHTML(patient.name)}</strong> possui
+                <strong style="color:#F5A623">${pendingTx.length} receita${pendingTx.length > 1 ? 's' : ''} pendente${pendingTx.length > 1 ? 's' : ''}</strong>
+                no valor total de <strong style="color:#F5A623">${formatCurrency(pendingTotal)}</strong>.
+              </p>
+              <p style="color:var(--text-secondary);margin:0;font-size:.88rem;">Deseja continuar e lançar esta receita mesmo assim?</p>
+            </div>
+          `,
+          footer: `
+            <button class="btn btn-secondary" id="cancelPendingBtn">Cancelar</button>
+            <button class="btn btn-primary" id="confirmPendingBtn" style="background:var(--accent-warning,#F5A623);border-color:var(--accent-warning,#F5A623);">Sim, Lançar</button>
+          `
+        });
+
+        confirmModal.querySelector('#cancelPendingBtn').onclick = () => {
+          // Remove only the confirmation popup, keep the form open
+          confirmModal.remove();
+        };
+        confirmModal.querySelector('#confirmPendingBtn').onclick = () => {
+          confirmModal.remove();
+          doSave();
+        };
+        return;
+      }
+    }
+
+    doSave();
   };
 }
