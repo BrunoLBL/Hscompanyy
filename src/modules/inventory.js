@@ -1,8 +1,12 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate } from '../utils/helpers.js';
+import { formatCurrency, formatDate, escapeHTML, debounce } from '../utils/helpers.js';
 import { getInventory, saveInventoryItem, deleteInventoryItem, getInventoryNotifications, dismissInventoryNotification } from '../modules/store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
+import { paginate, renderPagination, bindPagination } from '../components/pagination.js';
+
+let searchInvTerm = '';
+let currentInvPage = 1;
 
 export function renderInventory(container) {
   const inventory = getInventory();
@@ -12,6 +16,16 @@ export function renderInventory(container) {
     const diff = (new Date(i.expiry) - new Date()) / (864e5);
     return diff >= 0 && diff <= 90;
   });
+
+  let filtered = [...inventory];
+  if (searchInvTerm) {
+    const q = searchInvTerm.toLowerCase();
+    filtered = filtered.filter(i => (i.name && i.name.toLowerCase().includes(q)) || (i.category && i.category.toLowerCase().includes(q)));
+  }
+
+  const pgInfo = paginate(filtered, currentInvPage, 20);
+  currentInvPage = pgInfo.page;
+  const pageData = pgInfo.pageItems;
 
   container.innerHTML = `
     <div class="page-title-bar">
@@ -28,7 +42,7 @@ export function renderInventory(container) {
           ${notifs.map(n => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(245,166,35,.06);border-radius:8px;">
               <div>
-                <div style="font-weight:600;font-size:.85rem;">${n.message}</div>
+                <div style="font-weight:600;font-size:.85rem;">${escapeHTML(n.message)}</div>
                 <div style="font-size:.75rem;color:var(--text-muted);">${new Date(n.createdAt).toLocaleString('pt-BR')}</div>
               </div>
               <button class="btn btn-secondary btn-sm dismiss-notif" data-id="${n.id}">Dispensar</button>
@@ -40,23 +54,34 @@ export function renderInventory(container) {
 
     ${lowStock.length > 0 ? `<div class="card" style="margin-bottom:20px;border-left:4px solid var(--accent-danger)">
       <h4 style="color:var(--accent-danger);font-size:.9rem;margin-bottom:8px">${icon('alertCircle',16)} Estoque Baixo (${lowStock.length} itens)</h4>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">${lowStock.map(i => `<span style="background:rgba(231,76,60,.08);color:var(--accent-danger);padding:4px 12px;border-radius:8px;font-size:.78rem;font-weight:500">${i.name}: ${i.qty}/${i.minQty}</span>`).join('')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${lowStock.map(i => `<span style="background:rgba(231,76,60,.08);color:var(--accent-danger);padding:4px 12px;border-radius:8px;font-size:.78rem;font-weight:500">${escapeHTML(i.name)}: ${i.qty}/${i.minQty}</span>`).join('')}</div>
     </div>` : ''}
 
     <div class="card">
+      <div class="list-header">
+        <div class="filter-group">
+          <div class="header-search" style="position:relative">
+            ${icon('search',16)}
+            <input type="text" id="invSearchInput" placeholder="Buscar produto ou categoria..." value="${escapeHTML(searchInvTerm)}" style="width:260px"/>
+          </div>
+        </div>
+        <span style="font-size:.8rem;color:var(--text-muted)">${filtered.length} itens</span>
+      </div>
+
+      ${filtered.length === 0 ? '<div class="empty-state"><h3>Nenhum item encontrado</h3><p>Cadastre um novo item ou ajuste sua busca</p></div>' : `
       <table class="data-table">
         <thead><tr><th>Produto</th><th>Categoria</th><th>Qtd</th><th>Mín</th><th>Unidade</th><th>Custo Unit.</th><th>Validade</th><th>Status</th><th>Ações</th></tr></thead>
         <tbody>
-          ${inventory.map(i => {
+          ${pageData.map(i => {
             const isLow = i.qty <= i.minQty;
             const isExpiring = i.expiry && (new Date(i.expiry) - new Date()) / 864e5 <= 90;
             const isExpired = i.expiry && new Date(i.expiry) < new Date();
             return `<tr>
-              <td style="font-weight:600">${i.name}</td>
-              <td>${i.category}</td>
+              <td style="font-weight:600">${escapeHTML(i.name)}</td>
+              <td>${escapeHTML(i.category)}</td>
               <td style="font-weight:700;color:${isLow?'var(--accent-danger)':'var(--text)'}">${i.qty}</td>
               <td style="color:var(--text-muted)">${i.minQty}</td>
-              <td>${i.unit}</td>
+              <td>${escapeHTML(i.unit)}</td>
               <td>${formatCurrency(i.cost)}</td>
               <td>${i.expiry ? `<span style="color:${isExpired?'var(--accent-danger)':isExpiring?'var(--accent-warn)':'var(--text)'}">${formatDate(i.expiry)}</span>` : '-'}</td>
               <td>${isExpired ? '<span class="status-badge status-cancelled">Vencido</span>' : isLow ? '<span class="status-badge status-pending">Baixo</span>' : '<span class="status-badge status-active">OK</span>'}</td>
@@ -68,10 +93,24 @@ export function renderInventory(container) {
           }).join('')}
         </tbody>
       </table>
+      ${renderPagination(pgInfo, 'inventory', 'itens')}
+      `}
     </div>
   `;
 
   document.getElementById('addItemBtn').onclick = () => openItemForm(null, container);
+  
+  document.getElementById('invSearchInput')?.addEventListener('input', debounce((e) => {
+    searchInvTerm = e.target.value;
+    currentInvPage = 1;
+    renderInventory(container);
+  }, 250));
+
+  bindPagination(container, 'inventory', (newPage) => {
+    currentInvPage = newPage;
+    renderInventory(container);
+  });
+
   container.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
     const item = inventory.find(i => i.id === b.dataset.edit);
     if (item) openItemForm(item, container);
@@ -92,11 +131,11 @@ function openItemForm(item, parentContainer) {
   const modal = openModal({
     title: isEdit ? 'Editar Item' : 'Novo Item',
     content: `
-      <div class="form-group"><label>Nome do Produto *</label><input type="text" id="invName" value="${i.name}"/></div>
+      <div class="form-group"><label>Nome do Produto *</label><input type="text" id="invName" value="${escapeHTML(i.name)}"/></div>
       <div class="form-row">
         <div class="form-group"><label>Categoria</label>
           <select id="invCat"><option ${i.category==='Material'?'selected':''}>Material</option><option ${i.category==='Descartável'?'selected':''}>Descartável</option><option ${i.category==='Instrumento'?'selected':''}>Instrumento</option><option ${i.category==='Medicamento'?'selected':''}>Medicamento</option><option ${i.category==='Outro'?'selected':''}>Outro</option></select></div>
-        <div class="form-group"><label>Unidade</label><input type="text" id="invUnit" value="${i.unit}"/></div>
+        <div class="form-group"><label>Unidade</label><input type="text" id="invUnit" value="${escapeHTML(i.unit)}"/></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Quantidade Atual</label><input type="number" id="invQty" value="${i.qty}" min="0"/></div>

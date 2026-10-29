@@ -1,7 +1,6 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate, isToday, isNoShow } from '../utils/helpers.js';
+import { formatCurrency, formatDate, isToday, isNoShow, escapeHTML, parseLocalDate, chartColors } from '../utils/helpers.js';
 import { getPatients, getAppointments, getTransactions, getInventory, getCurrentUser } from '../modules/store.js';
-import { navigate } from '../modules/router.js';
 import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables);
 
@@ -23,11 +22,11 @@ export function renderDashboard(container) {
   const todayAppts = appointments.filter(a => isToday(a.date) && a.status !== 'cancelled');
   const now = new Date();
   const thisMonth = transactions.filter(t => {
-    const d = new Date(t.date);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    const d = parseLocalDate(t.date);
+    return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
-  const monthIncome = thisMonth.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const monthExpense = thisMonth.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const monthIncome = thisMonth.filter(t => t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const monthExpense = thisMonth.filter(t => t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0);
   const lowStock = inventory.filter(i => i.qty <= i.minQty).length;
   
   const pendingPayments = transactions.filter(t => t.status === 'pending').length;
@@ -44,7 +43,7 @@ export function renderDashboard(container) {
       <div class="card kpi-card">
         <div class="kpi-icon" style="background:rgba(30,111,217,.1);color:var(--primary)">${icon('users',24)}</div>
         <div class="kpi-info"><h3>${activePatients}</h3><span>Pacientes Ativos</span>
-          <div class="kpi-trend up">${icon('trendUp',14)} +${Math.floor(Math.random()*5+2)} este mês</div>
+          <div class="kpi-trend up">${icon('trendUp',14)} ${patients.length} cadastrados</div>
         </div>
       </div>
       <div class="card kpi-card">
@@ -57,7 +56,7 @@ export function renderDashboard(container) {
       <div class="card kpi-card">
         <div class="kpi-icon" style="background:rgba(245,166,35,.1);color:var(--accent-warn)">${icon('dollar',24)}</div>
         <div class="kpi-info"><h3>${formatCurrency(monthIncome)}</h3><span>Receita do Mês</span>
-          <div class="kpi-trend ${monthIncome>monthExpense?'up':'down'}">${icon(monthIncome>monthExpense?'trendUp':'trendDown',14)} Lucro: ${formatCurrency(monthIncome-monthExpense)}</div>
+          <div class="kpi-trend ${monthIncome>monthExpense?'up':'down'}">${icon(monthIncome>monthExpense?'trendUp':'trendDown',14)} Saldo: ${formatCurrency(monthIncome-monthExpense)}</div>
         </div>
       </div>
       ` : ''}
@@ -86,8 +85,8 @@ export function renderDashboard(container) {
                  onclick="location.hash='#/prontuario/${a.patientId}'">
               <div style="font-weight:700;color:var(--primary);min-width:50px;font-size:.85rem">${a.time}</div>
               <div style="flex:1">
-                <div style="font-weight:600;font-size:.85rem">${a.patientName}</div>
-                <div style="font-size:.75rem;color:var(--text-muted)">${a.procedure} · ${a.dentist}</div>
+                <div style="font-weight:600;font-size:.85rem">${escapeHTML(a.patientName)}</div>
+                <div style="font-size:.75rem;color:var(--text-muted)">${escapeHTML(a.procedure)} · ${escapeHTML(a.dentist)}</div>
               </div>
               ${isNoShow(a, now) ? `<span class="status-badge status-cancelled">Faltou</span>` : `<span class="status-badge status-${a.status}">${a.status==='confirmed'?'Confirmado':a.status==='pending'?'Pendente':'Concluído'}</span>`}
             </div>
@@ -110,7 +109,7 @@ export function renderDashboard(container) {
           <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--radius-sm);background:rgba(30,111,217,.06)">
             <div style="color:var(--primary)">${icon('calendar',18)}</div>
             <div><div style="font-weight:600;font-size:.82rem">Próxima semana</div>
-            <div style="font-size:.72rem;color:var(--text-muted)">${appointments.filter(a=>{const d=new Date(a.date);const diff=(d-now)/(864e5);return diff>0&&diff<=7&&a.status!=='cancelled'}).length} consultas agendadas</div></div>
+            <div style="font-size:.72rem;color:var(--text-muted)">${appointments.filter(a=>{const d=parseLocalDate(a.date);if(!d)return false;const diff=(d-now)/(864e5);return diff>0&&diff<=7&&a.status!=='cancelled'}).length} consultas agendadas</div></div>
           </div>
         </div>
       </div>
@@ -126,11 +125,11 @@ export function renderDashboard(container) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       months.push(d.toLocaleDateString('pt-BR', { month: 'short' }));
       const mt = transactions.filter(t => {
-        const td = new Date(t.date);
-        return td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear();
+        const td = parseLocalDate(t.date);
+        return td && td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear();
       });
-      incomes.push(mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
-      expenses.push(mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
+      incomes.push(mt.filter(t => t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0));
+      expenses.push(mt.filter(t => t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0));
     }
 
     const ctx1 = document.getElementById('cashFlowChart');
@@ -154,10 +153,9 @@ export function renderDashboard(container) {
 
     // Category Chart
     const cats = {};
-    thisMonth.filter(t => t.type === 'income').forEach(t => { cats[t.description] = (cats[t.description] || 0) + t.amount; });
-    const catLabels = Object.keys(cats).slice(0, 6);
+    thisMonth.filter(t => t.type === 'income').forEach(t => { cats[t.description || 'Outros'] = (cats[t.description || 'Outros'] || 0) + (Number(t.amount) || 0); });
+    const catLabels = Object.keys(cats).slice(0, 8);
     const catValues = catLabels.map(k => cats[k]);
-    const catColors = ['#1E6FD9', '#00C48C', '#F5A623', '#E74C3C', '#9B59B6', '#1ABC9C'];
 
     const ctx2 = document.getElementById('categoryChart');
     if (ctx2) {
@@ -165,7 +163,7 @@ export function renderDashboard(container) {
         type: 'doughnut',
         data: {
           labels: catLabels,
-          datasets: [{ data: catValues, backgroundColor: catColors, borderWidth: 0, hoverOffset: 8 }]
+          datasets: [{ data: catValues, backgroundColor: chartColors(catLabels.length), borderWidth: 0, hoverOffset: 8 }]
         },
         options: {
           responsive: true, maintainAspectRatio: false, cutout: '65%',

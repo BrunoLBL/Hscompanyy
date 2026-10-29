@@ -180,11 +180,16 @@ border-radius:var(--radius);box-shadow:var(--shadow-lg);max-height:300px;overflo
 .search-results.visible{display:block}
 .search-result-item{padding:10px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:var(--transition)}
 .search-result-item:hover{background:var(--primary-bg)}
-.pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:20px}
-.pagination button{width:36px;height:36px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-card);
-cursor:pointer;font-family:var(--font);font-weight:500;transition:var(--transition)}
-.pagination button:hover{border-color:var(--primary);color:var(--primary)}
-.pagination button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+/* ─── Paginação (máx. 5 páginas visíveis + atalho da última) ─── */
+.pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px;padding:12px 4px 4px;border-top:1px solid var(--border);max-width:100%;box-sizing:border-box}
+.pagination-info{font-size:.78rem;color:var(--text-muted);white-space:nowrap}
+.pagination-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;max-width:100%}
+.pagination button, .pagination .pagination-btn{min-width:36px;height:36px;padding:0 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;font-family:var(--font);font-weight:500;font-size:.82rem;transition:var(--transition);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.pagination button:hover:not(:disabled), .pagination .pagination-btn:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}
+.pagination button.active, .pagination .pagination-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);cursor:default}
+.pagination button:disabled, .pagination .pagination-btn:disabled{opacity:.45;cursor:not-allowed}
+.pagination .pagination-nav{padding:0 14px;font-weight:600}
+.pagination-ellipsis{color:var(--text-muted);padding:0 4px;font-weight:700;user-select:none}
 .skeleton{background:linear-gradient(90deg,var(--border) 25%,#f0f0f0 50%,var(--border) 75%);background-size:200% 100%;
 animation:shimmer 1.5s infinite;border-radius:var(--radius-sm)}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}

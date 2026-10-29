@@ -1,5 +1,6 @@
 import { getData, getInventory, saveInventoryItem, saveInventoryNotification, addLog } from './store.js';
 import { icon } from '../utils/icons.js';
+import { verifyPassword, escapeHTML } from '../utils/helpers.js';
 import { toast } from '../components/toast.js';
 
 let categoryFilter = 'all';
@@ -46,7 +47,7 @@ function renderLogin(container, dentists) {
     </div>
   `;
 
-  document.getElementById('invPortalLoginBtn').onclick = () => {
+  document.getElementById('invPortalLoginBtn').onclick = async () => {
     const dentist = document.getElementById('invPortalDentistSelect').value;
     const pwd = document.getElementById('invPortalPassword').value;
     if (!dentist) { toast.error('Selecione seu perfil.'); return; }

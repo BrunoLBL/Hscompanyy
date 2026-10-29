@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge } from '../utils/helpers.js';
+import { formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge, localDateTimeStr, compressImage } from '../utils/helpers.js';
 import { getPatient, getClinicalRecords, saveClinicalRecord, getPhotos, savePhoto, getOdontogram, saveOdontogram } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { toast } from '../components/toast.js';
@@ -119,7 +119,7 @@ function renderHistorico(tc, patientId, records) {
         </div>
         <div class="form-row">
           <div class="form-group"><label>Dentista</label><input type="text" id="recDentist" value="${dentistName}" readonly style="background:var(--bg-lighter)"/></div>
-          <div class="form-group"><label>Data</label><input type="datetime-local" id="recDate" value="${new Date().toISOString().slice(0,16)}"/></div>
+          <div class="form-group"><label>Data</label><input type="datetime-local" id="recDate" value="${localDateTimeStr()}"/></div>
         </div>
         <div class="form-group"><label>Observações</label><textarea id="recNotes" rows="3"></textarea></div>
       `, footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>

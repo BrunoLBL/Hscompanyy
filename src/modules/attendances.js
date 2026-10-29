@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatDate, escapeHTML, isNoShow } from '../utils/helpers.js';
+import { formatDate, escapeHTML, isNoShow, localDateStr, isoToLocalDateStr } from '../utils/helpers.js';
 import { getAttendances, saveAttendance, getPatients, getAppointments, saveAppointment, getData, completeAttendanceProcess, savePatient, deleteAttendance, getCancelledAttendances, saveCancelledAttendance } from './store.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -8,7 +8,7 @@ export function renderAttendances(container) {
   const attendances = getAttendances();
 
   // ─── Dashboard do Dia: agendamentos de hoje por status ───
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   const todayAppts = getAppointments().filter(a => a.date === todayStr);
   const confirmedAppts = todayAppts.filter(a => a.status === 'confirmed');
   const pendingAppts = todayAppts.filter(a => a.status === 'pending');
@@ -270,11 +270,11 @@ function openCancelledAttendancesModal() {
 
 function filterCancelledByPeriod(items, period, customDate) {
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = localDateStr(now);
 
   switch (period) {
     case 'today':
-      return items.filter(c => (c.cancelledAt || c.createdAt || '').slice(0, 10) === todayStr);
+      return items.filter(c => isoToLocalDateStr(c.cancelledAt || c.createdAt) === todayStr);
 
     case 'week': {
       const startOfWeek = new Date(now);
@@ -289,12 +289,12 @@ function filterCancelledByPeriod(items, period, customDate) {
 
     case 'month': {
       const monthStr = todayStr.slice(0, 7);
-      return items.filter(c => (c.cancelledAt || c.createdAt || '').slice(0, 7) === monthStr);
+      return items.filter(c => isoToLocalDateStr(c.cancelledAt || c.createdAt).slice(0, 7) === monthStr);
     }
 
     case 'custom':
       if (!customDate) return [];
-      return items.filter(c => (c.cancelledAt || c.createdAt || '').slice(0, 10) === customDate);
+      return items.filter(c => isoToLocalDateStr(c.cancelledAt || c.createdAt) === customDate);
 
     default:
       return items;
@@ -418,7 +418,7 @@ function openDashboardPopup(title, appointments, statusKey) {
 function openNewAttendanceModal(parentContainer) {
   const patients = getPatients().filter(p => p.status === 'active');
   const procedures = ['Avaliação', 'Limpeza', 'Restauração', 'Extração', 'Canal', 'Clareamento', 'Implante', 'Ortodontia', 'Prótese', 'Raio-X', 'Manutenção', 'Harmonização', 'Outro'];
-  const todayAppts = getAppointments().filter(a => a.date === new Date().toISOString().slice(0, 10) && !['completed', 'cancelled'].includes(a.status));
+  const todayAppts = getAppointments().filter(a => a.date === localDateStr() && !['completed', 'cancelled'].includes(a.status));
   const dentists = getData().settings?.dentists || [];
 
   const modal = openModal({

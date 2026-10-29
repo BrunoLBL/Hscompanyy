@@ -1,5 +1,6 @@
 import { getData, getAttendances, completeAttendanceProcess } from './store.js';
 import { icon } from '../utils/icons.js';
+import { verifyPassword, escapeHTML } from '../utils/helpers.js';
 import { toast } from '../components/toast.js';
 
 let timerInterval = null;
@@ -80,7 +81,7 @@ function renderLogin(container, dentists) {
     </div>
   `;
 
-  document.getElementById('portalLoginBtn').onclick = () => {
+  document.getElementById('portalLoginBtn').onclick = async () => {
     const dentist = document.getElementById('portalDentistSelect').value;
     const pwd = document.getElementById('portalPassword').value;
 

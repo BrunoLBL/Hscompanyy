@@ -1,5 +1,5 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge, escapeHTML, isNoShow } from '../utils/helpers.js';
+import { formatCurrency, formatDate, formatDateTime, formatPhone, formatCPF, getInitials, getAge, escapeHTML, isNoShow, localDateTimeStr, compressImage } from '../utils/helpers.js';
 import { getPatient, getClinicalRecords, saveClinicalRecord, getPhotos, savePhoto, deletePhoto, getTreatments, saveTreatment, getAppointments, getTransactions, getOdontogram, saveOdontogram, getDocuments, saveDocument, deleteDocument, getData } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { openModal, closeAllModals } from '../components/modal.js';
@@ -125,8 +125,10 @@ function renderHistorico(tc, patientId, records) {
         </div>
         <div class="form-row">
           <div class="form-group"><label>Dentista</label>
-            <select id="recDentist"><option>Dra. Helena Souza</option><option>Dr. Ricardo Mendes</option></select></div>
-          <div class="form-group"><label>Data</label><input type="datetime-local" id="recDate" value="${new Date().toISOString().slice(0,16)}"/></div>
+            <select id="recDentist">
+              ${(getData().settings?.dentists || []).length === 0 ? '<option value="Recepção">Recepção</option>' : (getData().settings?.dentists || []).map(d => `<option value="${escapeHTML(d.name)}">${escapeHTML(d.name)}</option>`).join('')}
+            </select></div>
+          <div class="form-group"><label>Data</label><input type="datetime-local" id="recDate" value="${localDateTimeStr()}"/></div>
         </div>
         <div class="form-group"><label>Observações</label><textarea id="recNotes" rows="3"></textarea></div>
       `, footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
@@ -284,7 +286,9 @@ function renderTratamentos(tc, patientId, treatments) {
         <div class="form-group"><label>Valor Total (R$)</label><input type="number" id="trValue" step="0.01"/></div>
       </div>
       <div class="form-group"><label>Dentista</label>
-        <select id="trDentist"><option>Dra. Helena Souza</option><option>Dr. Ricardo Mendes</option></select></div>
+        <select id="trDentist">
+          ${(getData().settings?.dentists || []).length === 0 ? '<option value="Recepção">Recepção</option>' : (getData().settings?.dentists || []).map(d => `<option value="${escapeHTML(d.name)}">${escapeHTML(d.name)}</option>`).join('')}
+        </select></div>
     `, footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
       <button class="btn btn-primary" id="saveTrBtn">Salvar</button>` });
     modal.querySelector('#saveTrBtn').onclick = () => {

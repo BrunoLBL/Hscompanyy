@@ -4,16 +4,22 @@ import { getPatients, savePatient, deletePatient } from '../modules/store.js';
 import { navigate } from '../modules/router.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
+import { paginate, renderPagination, bindPagination } from '../components/pagination.js';
 
 export function renderPatients(container) {
   let searchTerm = '';
   let statusFilter = 'all';
+  let currentPage = 1;
   
   function render() {
     let patients = getPatients();
     if (searchTerm) patients = patients.filter(p => p.name.toLowerCase().includes(searchTerm) || (p.cpf && p.cpf.includes(searchTerm)));
     if (statusFilter !== 'all') patients = patients.filter(p => p.status === statusFilter);
     patients.sort((a, b) => a.name.localeCompare(b.name));
+
+    const pgInfo = paginate(patients, currentPage, 20);
+    currentPage = pgInfo.page;
+    const pageData = pgInfo.pageItems;
 
     container.innerHTML = `
       <div class="page-title-bar">
@@ -25,7 +31,7 @@ export function renderPatients(container) {
           <div class="filter-group">
             <div class="header-search" style="position:relative">
               ${icon('search',16)}
-              <input type="text" id="patientSearch" placeholder="Buscar por nome ou CPF..." value="${searchTerm}" style="width:260px"/>
+              <input type="text" id="patientSearch" placeholder="Buscar por nome ou CPF..." value="${escapeHTML(searchTerm)}" style="width:260px"/>
             </div>
             <select id="statusFilter">
               <option value="all" ${statusFilter==='all'?'selected':''}>Todos</option>
@@ -41,7 +47,7 @@ export function renderPatients(container) {
             <th>Paciente</th><th>CPF</th><th>Telefone</th><th>Idade</th><th>Status</th><th>Tags</th><th style="width:120px">Ações</th>
           </tr></thead>
           <tbody>
-            ${patients.map(p => `
+            ${pageData.map(p => `
               <tr>
                 <td>
                   <div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="location.hash='#/prontuario/${p.id}'">
@@ -65,14 +71,30 @@ export function renderPatients(container) {
               </tr>
             `).join('')}
           </tbody>
-        </table>`}
+        </table>
+        ${renderPagination(pgInfo, 'patients', 'pacientes')}
+        `}
       </div>
     `;
 
     // Event listeners
     document.getElementById('addPatientBtn')?.addEventListener('click', () => openPatientForm());
-    document.getElementById('patientSearch')?.addEventListener('input', debounce(e => { searchTerm = e.target.value.toLowerCase(); render(); }, 250));
-    document.getElementById('statusFilter')?.addEventListener('change', e => { statusFilter = e.target.value; render(); });
+    document.getElementById('patientSearch')?.addEventListener('input', debounce(e => {
+      searchTerm = e.target.value.toLowerCase();
+      currentPage = 1;
+      render();
+    }, 250));
+    document.getElementById('statusFilter')?.addEventListener('change', e => {
+      statusFilter = e.target.value;
+      currentPage = 1;
+      render();
+    });
+
+    bindPagination(container, 'patients', (newPage) => {
+      currentPage = newPage;
+      render();
+    });
+
     container.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', e => {
       e.stopPropagation();
       const p = getPatients().find(x => x.id === b.dataset.edit);
@@ -104,7 +126,7 @@ export function openPatientForm(patient = null) {
       </div>
       <div class="form-row">
         <div class="form-group"><label>Telefone *</label><input type="text" id="pPhone" value="${p.phone||''}" /></div>
-        <div class="form-group"><label>Email</label><input type="email" id="pEmail" value="${p.email||''}"/></div>
+        <div class="form-group"><label>Email</label><input type="email" id="pEmail" value="${escapeHTML(p.email||'')}"/></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Data de Nascimento</label><input type="date" id="pBirth" value="${p.birth||''}"/></div>

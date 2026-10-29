@@ -1,10 +1,12 @@
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate } from '../utils/helpers.js';
-import { getPatients, getAppointments, getTransactions, getInventory } from '../modules/store.js';
+import { formatCurrency, formatDate, escapeHTML, chartColors } from '../utils/helpers.js';
+import { getPatients, getAppointments, getTransactions } from '../modules/store.js';
+import { paginate, renderPagination, bindPagination } from '../components/pagination.js';
 import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables);
 
 let charts = [];
+let reportsPatientPage = 1;
 
 export function renderReports(container) {
   charts.forEach(c => c.destroy()); charts = [];
@@ -15,12 +17,17 @@ export function renderReports(container) {
 
   // Stats
   const totalPatients = patients.length;
-  const activePatients = patients.filter(p => p.status === 'active').length;
+  const activePatients = patients.filter(p => p.status === 'active');
   const totalAppts = appointments.length;
   const completedAppts = appointments.filter(a => a.status === 'completed').length;
   const cancelledAppts = appointments.filter(a => a.status === 'cancelled').length;
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+  // Paginação do Balanço por Paciente
+  const pgInfo = paginate(activePatients, reportsPatientPage, 15);
+  reportsPatientPage = pgInfo.page;
+  const pagePatients = pgInfo.pageItems;
 
   container.innerHTML = `
     <div class="page-title-bar">
@@ -33,7 +40,7 @@ export function renderReports(container) {
       <div class="card kpi-card"><div class="kpi-icon" style="background:rgba(0,196,140,.1);color:var(--accent)">${icon('calendar',20)}</div>
         <div class="kpi-info"><h3>${totalAppts}</h3><span>Total Consultas</span></div></div>
       <div class="card kpi-card"><div class="kpi-icon" style="background:rgba(245,166,35,.1);color:var(--accent-warn)">${icon('check',20)}</div>
-        <div class="kpi-info"><h3>${completedAppts > 0 ? Math.round(completedAppts/totalAppts*100) : 0}%</h3><span>Taxa Conclusão</span></div></div>
+        <div class="kpi-info"><h3>${totalAppts > 0 ? Math.round(completedAppts/totalAppts*100) : 0}%</h3><span>Taxa Conclusão</span></div></div>
       <div class="card kpi-card"><div class="kpi-icon" style="background:rgba(0,196,140,.1);color:var(--accent)">${icon('dollar',20)}</div>
         <div class="kpi-info"><h3>${formatCurrency(totalIncome - totalExpense)}</h3><span>Lucro Total</span></div></div>
     </div>
@@ -48,18 +55,26 @@ export function renderReports(container) {
     </div>
 
     <div class="card">
-      <h4 style="font-weight:600;margin-bottom:16px">Balanço por Paciente</h4>
+      <h4 style="font-weight:600;margin-bottom:16px">Balanço por Paciente (${activePatients.length} ativos)</h4>
+      ${activePatients.length === 0 ? '<div class="empty-state"><p>Nenhum paciente ativo no momento.</p></div>' : `
       <table class="data-table"><thead><tr><th>Paciente</th><th>Receitas</th><th>Nº Consultas</th><th>Última Consulta</th></tr></thead>
-      <tbody>${patients.filter(p=>p.status==='active').slice(0,15).map(p => {
+      <tbody>${pagePatients.map(p => {
         const pTx = transactions.filter(t => t.patientId === p.id && t.type === 'income');
         const pAppts = appointments.filter(a => a.patientId === p.id);
         const lastAppt = pAppts.sort((a,b) => new Date(b.date)-new Date(a.date))[0];
-        return `<tr><td style="font-weight:600;cursor:pointer" onclick="location.hash='#/prontuario/${p.id}'">${p.name}</td>
-          <td style="font-weight:600;color:var(--accent)">${formatCurrency(pTx.reduce((s,t)=>s+t.amount,0))}</td>
+        return `<tr><td style="font-weight:600;cursor:pointer" onclick="location.hash='#/prontuario/${p.id}'">${escapeHTML(p.name)}</td>
+          <td style="font-weight:600;color:var(--accent)">${formatCurrency(pTx.reduce((s,t)=>s+(Number(t.amount)||0),0))}</td>
           <td>${pAppts.length}</td><td>${lastAppt ? formatDate(lastAppt.date) : '-'}</td></tr>`;
       }).join('')}</tbody></table>
+      ${renderPagination(pgInfo, 'reports-patients', 'pacientes')}
+      `}
     </div>
   `;
+
+  bindPagination(container, 'reports-patients', (newPage) => {
+    reportsPatientPage = newPage;
+    renderReports(container);
+  });
 
   // Patients per month chart
   const pMonths = []; const pCounts = [];
@@ -84,9 +99,10 @@ export function renderReports(container) {
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     rMonths.push(d.toLocaleDateString('pt-BR', { month: 'short' }));
-    const mt = transactions.filter(t => { const td = new Date(t.date); return td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear(); });
-    rInc.push(mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
-    rExp.push(mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
+    const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const mt = transactions.filter(t => t.date && t.date.startsWith(monthStr));
+    rInc.push(mt.filter(t => t.type === 'income').reduce((s, t) => s + (Number(t.amount) || 0), 0));
+    rExp.push(mt.filter(t => t.type === 'expense').reduce((s, t) => s + (Number(t.amount) || 0), 0));
   }
   const c3 = document.getElementById('rpRevenueChart');
   if (c3) charts.push(new Chart(c3, { type: 'line', data: { labels: rMonths,
@@ -98,10 +114,10 @@ export function renderReports(container) {
   // Procedures chart
   const procs = {};
   appointments.filter(a => a.status === 'completed').forEach(a => { procs[a.procedure] = (procs[a.procedure] || 0) + 1; });
-  const sorted = Object.entries(procs).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const sorted = Object.entries(procs).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const c4 = document.getElementById('rpProcChart');
   if (c4) charts.push(new Chart(c4, { type: 'bar', data: { labels: sorted.map(s => s[0]),
-    datasets: [{ data: sorted.map(s => s[1]), backgroundColor: ['#1E6FD9','#00C48C','#F5A623','#9B59B6','#E91E63','#1ABC9C'], borderRadius: 6 }] },
+    datasets: [{ data: sorted.map(s => s[1]), backgroundColor: chartColors(sorted.length), borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } },
       scales: { x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,.04)' } }, y: { grid: { display: false } } } } }));
 }

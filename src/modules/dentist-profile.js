@@ -1,6 +1,9 @@
 import { getData, getTreatments, getPatients } from './store.js';
 import { icon } from '../utils/icons.js';
-import { formatCurrency, formatDate } from '../utils/helpers.js';
+import { formatCurrency, formatDate, escapeHTML } from '../utils/helpers.js';
+import { paginate, renderPagination, bindPagination } from '../components/pagination.js';
+
+let profilePage = 1;
 
 export function renderDentistProfile(container, id) {
   const data = getData();
@@ -11,13 +14,9 @@ export function renderDentistProfile(container, id) {
     return;
   }
 
-  // Obter todos os tratamentos realizados por este dentista
-  // Como os tratamentos guardam o nome do dentista (dentist), filtramos por ele.
   const allTreatments = data.treatments || [];
   const dentistTreatments = allTreatments.filter(t => t.dentist === dentist.name);
   
-  // Para exibir o nome do paciente, podemos usar t.patientId se necessário,
-  // mas o treatment não armazena patientName por padrão, então vamos buscar o paciente:
   const patients = data.patients || [];
   const getPatientName = (pId) => {
     const p = patients.find(x => x.id === pId);
@@ -47,6 +46,11 @@ export function renderDentistProfile(container, id) {
   // Ordenar tratamentos do mais recente pro mais antigo
   const sortedTreatments = [...dentistTreatments].sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
 
+  // Paginação
+  const pgInfo = paginate(sortedTreatments, profilePage, 15);
+  profilePage = pgInfo.page;
+  const pageData = pgInfo.pageItems;
+
   const html = `
     <div class="page-title-bar" style="margin-bottom: 20px;">
       <div>
@@ -64,7 +68,7 @@ export function renderDentistProfile(container, id) {
       </div>
       <div style="flex:1;">
         <h3 style="font-size:1.5rem;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:12px;">
-          ${dentist.name}
+          ${escapeHTML(dentist.name)}
           <span style="font-size:0.75rem;padding:4px 10px;border-radius:12px;background:${typeBg};color:#fff;font-weight:600;display:flex;align-items:center;gap:4px;">
             ${icon('star', 12)} ${typeLabel}
           </span>
@@ -121,7 +125,7 @@ export function renderDentistProfile(container, id) {
     <!-- Tabela de Produção -->
     <div class="card">
       <h4 style="font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;">
-        ${icon('list', 16)} Histórico de Produção
+        ${icon('list', 16)} Histórico de Produção (${sortedTreatments.length} procedimentos)
       </h4>
       
       <div style="overflow-x:auto;">
@@ -140,11 +144,11 @@ export function renderDentistProfile(container, id) {
           <tbody>
             ${sortedTreatments.length === 0 ? `
               <tr>
-                <td colspan="6" style="text-align:center;padding:32px;color:var(--text-muted);">
+                <td colspan="7" style="text-align:center;padding:32px;color:var(--text-muted);">
                   Nenhum procedimento registrado para este dentista.
                 </td>
               </tr>
-            ` : sortedTreatments.map(t => {
+            ` : pageData.map(t => {
               
               let statusBadge = '';
               if(t.status === 'completed') statusBadge = `<span style="color:#10b981;background:rgba(16,185,129,0.1);padding:2px 8px;border-radius:12px;font-size:0.75rem;">Concluído</span>`;
@@ -160,10 +164,10 @@ export function renderDentistProfile(container, id) {
                 <td style="white-space:nowrap;">${formatDate(t.startDate)}</td>
                 <td style="font-weight:500;">
                   <a href="#/prontuario/${t.patientId}" style="color:var(--text);text-decoration:none;">
-                    ${getPatientName(t.patientId)}
+                    ${escapeHTML(getPatientName(t.patientId))}
                   </a>
                 </td>
-                <td>${t.procedure}</td>
+                <td>${escapeHTML(t.procedure)}</td>
                 <td><span style="font-size:0.8rem;color:var(--text-muted);font-family:monospace;">${timeFormatted}</span></td>
                 <td>${statusBadge}</td>
                 <td style="text-align:right;font-weight:600;">${formatCurrency(t.value)}</td>
@@ -174,8 +178,14 @@ export function renderDentistProfile(container, id) {
           </tbody>
         </table>
       </div>
+      ${renderPagination(pgInfo, 'dentist-profile', 'procedimentos')}
     </div>
   `;
 
   container.innerHTML = html;
+
+  bindPagination(container, 'dentist-profile', (newPage) => {
+    profilePage = newPage;
+    renderDentistProfile(container, id);
+  });
 }

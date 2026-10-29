@@ -1,4 +1,4 @@
-import { generateId } from '../utils/helpers.js';
+import { generateId, localDateStr } from '../utils/helpers.js';
 import { createClient } from '@supabase/supabase-js';
 
 const STORE_KEY = 'hscorp_data';
@@ -583,7 +583,7 @@ export function completeAppointmentProcess(id) {
   
   if (value > 0) {
     saveTransaction({
-      type: 'income', date: new Date().toISOString().slice(0, 10),
+      type: 'income', date: localDateStr(),
       amount: value, description: appt.procedure,
       category: 'Procedimento', patientId: appt.patientId,
       patientName: appt.patientName, method: 'PIX', status: 'paid'
@@ -665,7 +665,7 @@ export function completeAttendanceProcess(id, durationSeconds = 0) {
   if (!attendance) return false;
 
   saveTransaction({
-    type: 'income', date: new Date().toISOString().slice(0, 10),
+    type: 'income', date: localDateStr(),
     amount: attendance.value, description: attendance.procedure,
     category: 'Procedimento', patientId: attendance.patientId,
     patientName: attendance.patientName, method: 'PIX', status: 'paid'
