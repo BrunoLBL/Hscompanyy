@@ -1496,3 +1496,593 @@ cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(
   .dentist-inv-card:hover{transform:none;box-shadow:0 2px 8px rgba(0,0,0,.04)}
   .doc-card:hover{transform:none}
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ODONTOGRAMA ANATÔMICO PROFISSIONAL (BOCA ABERTA + CARTA COM RAÍZES)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.odonto-pro-card {
+  padding: 22px 24px;
+}
+
+.odonto-pro-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.odonto-pro-title {
+  font-size: 1.12rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 3px 0;
+}
+
+.odonto-pro-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.odonto-pro-toggles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.odonto-segmented {
+  display: inline-flex;
+  background: var(--bg-subtle);
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.odonto-seg-btn {
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-radius: 7px;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.odonto-seg-btn:hover {
+  color: var(--text);
+}
+
+.odonto-seg-btn.active {
+  background: var(--bg-white);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Barra de Paleta de Condições + Modo de Clique */
+.odonto-palette-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: var(--bg-subtle);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  margin-bottom: 20px;
+}
+
+.odonto-conditions-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.odonto-cond-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--bg-white);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.odonto-cond-btn:hover {
+  border-color: var(--cond-color, var(--primary));
+  transform: translateY(-1px);
+}
+
+.odonto-cond-btn.active {
+  background: var(--cond-bg, var(--primary-bg));
+  border-color: var(--cond-color, var(--primary));
+  color: var(--text);
+  box-shadow: 0 0 0 3px rgba(30, 111, 217, 0.14);
+}
+
+.odonto-cond-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.odonto-apply-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.odonto-apply-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.odonto-mode-pill {
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  background: var(--bg-white);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  transition: all 0.15s ease;
+}
+
+.odonto-mode-pill:hover {
+  border-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.odonto-mode-pill.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Layout Principal: Boca Aberta + Inspetor Lateral */
+.odonto-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.odonto-stage-col {
+  background: radial-gradient(circle at center, #F8FAFC 0%, #EEF2F6 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+}
+
+[data-theme="dark"] .odonto-stage-col {
+  background: radial-gradient(circle at center, #1E2538 0%, #131824 100%);
+}
+
+/* Palco SVG da Boca Aberta */
+.odonto-mouth-stage {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+.odonto-mouth-svg {
+  width: 100%;
+  height: auto;
+  max-height: 740px;
+  user-select: none;
+  filter: drop-shadow(0 10px 24px rgba(15, 23, 42, 0.08));
+}
+
+/* Interatividade das Faces Dentárias e Número FDI */
+.odonto-face {
+  cursor: pointer;
+  transition: fill 0.14s ease, filter 0.14s ease, stroke-width 0.14s ease;
+}
+
+.odonto-face:hover {
+  filter: brightness(0.9) saturate(1.2);
+  stroke: #0F172A;
+  stroke-width: 1.8px;
+}
+
+.odonto-arch-tooth {
+  transition: filter 0.2s ease;
+}
+
+.odonto-arch-tooth.is-selected .odonto-crown-group {
+  filter: drop-shadow(0 0 6px rgba(30, 111, 217, 0.55));
+}
+
+.odonto-num-badge {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.odonto-num-badge:hover rect {
+  stroke: var(--primary);
+  stroke-width: 1.8px;
+}
+
+/* Modo 2: Carta Clínica com Raízes */
+.odonto-chart-stage {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+}
+
+.odonto-chart-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.odonto-chart-row {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+  width: 100%;
+  overflow-x: auto;
+  padding: 6px 2px;
+}
+
+.odonto-chart-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-white);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 3px;
+  min-width: 44px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.odonto-chart-cell:hover {
+  border-color: var(--primary-light);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.odonto-chart-cell.selected {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+  box-shadow: 0 0 0 2px rgba(30, 111, 217, 0.18);
+}
+
+.odonto-chart-cell.midline-right {
+  margin-right: 10px;
+}
+
+.odonto-chart-num {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.odonto-chart-svg {
+  width: 38px;
+  height: 62px;
+  overflow: visible;
+}
+
+.odonto-chart-divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 4px 0;
+}
+
+.odonto-chart-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1.5px dashed var(--border);
+}
+
+.odonto-chart-divider span {
+  position: relative;
+  background: var(--bg-white);
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* Painel Inspetor Lateral do Dente */
+.odonto-inspector {
+  background: var(--bg-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.odonto-inspector-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 14px;
+}
+
+.odonto-inspector-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(30, 111, 217, 0.25);
+}
+
+.odonto-inspector-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 2px 0;
+  line-height: 1.25;
+}
+
+.odonto-inspector-sub {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.odonto-inspector-preview {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 12px 8px;
+  margin-bottom: 12px;
+}
+
+.odonto-inspector-compass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.compass-top,
+.compass-bottom {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.compass-middle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.compass-side {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 58px;
+  text-align: center;
+}
+
+.odonto-inspector-svg {
+  width: 112px;
+  height: 138px;
+  overflow: visible;
+}
+
+.odonto-inspector-quick {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.odonto-inspector-section-title {
+  display: block;
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.odonto-inspector-faces {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.odonto-face-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.odonto-face-row:hover {
+  border-color: var(--primary-light);
+  background: var(--primary-bg);
+}
+
+.odonto-face-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.odonto-face-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.odonto-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.odonto-inspector-notes textarea {
+  width: 100%;
+  font-size: 0.8rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  resize: vertical;
+}
+
+/* Resumo Clínico Inferior */
+.odonto-summary-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-light);
+}
+
+.odonto-summary-header h5 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 12px 0;
+}
+
+.odonto-summary-empty {
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  text-align: center;
+  border: 1px dashed var(--border);
+}
+
+.odonto-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.odonto-summary-item {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.odonto-summary-item:hover {
+  border-color: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+.odonto-summary-item.active {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+.odonto-summary-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.odonto-summary-tooth-num {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.odonto-summary-tooth-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.odonto-summary-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.odonto-summary-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.odonto-summary-note {
+  margin-top: 6px;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  background: var(--bg-white);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border-left: 3px solid var(--primary);
+}
+
+@media (max-width: 1024px) {
+  .odonto-workspace {
+    grid-template-columns: 1fr;
+  }
+}

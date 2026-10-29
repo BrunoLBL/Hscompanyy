@@ -5,6 +5,7 @@ import { navigate } from '../modules/router.js';
 import { openModal, closeAllModals } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { openPatientForm } from './patients.js';
+import { renderOdontogramModule } from '../components/odontogram.js';
 
 let currentTab = 'dados';
 
@@ -147,73 +148,7 @@ function renderHistorico(tc, patientId, records) {
 }
 
 function renderOdontogramTab(tc, patientId) {
-  const odontoData = getOdontogram(patientId);
-  const conditions = { healthy:'#E8F5E9', cavity:'#E74C3C', filling:'#1E6FD9', crown:'#F5A623', missing:'#9E9E9E', implant:'#9B59B6', rootCanal:'#E91E63' };
-  const condLabels = { healthy:'Saudável', cavity:'Cárie', filling:'Restauração', crown:'Coroa', missing:'Ausente', implant:'Implante', rootCanal:'Canal' };
-  let selectedCondition = 'cavity';
-
-  function renderOdonto() {
-    const upperTeeth = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
-    const lowerTeeth = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
-
-    function toothSVG(num) {
-      const data = odontoData[num] || {};
-      const faces = ['top','right','bottom','left','center'];
-      const colors = faces.map(f => conditions[data[f] || 'healthy']);
-      return `<g class="tooth" data-tooth="${num}">
-        <polygon points="5,0 35,0 30,10 10,10" fill="${colors[0]}" stroke="#ccc" stroke-width="1" data-face="top"/>
-        <polygon points="35,0 40,5 40,35 35,30 30,10" fill="${colors[1]}" stroke="#ccc" stroke-width="1" data-face="right"/>
-        <polygon points="10,30 30,30 35,40 5,40" fill="${colors[2]}" stroke="#ccc" stroke-width="1" data-face="bottom"/>
-        <polygon points="0,5 5,0 10,10 10,30 5,40 0,35" fill="${colors[3]}" stroke="#ccc" stroke-width="1" data-face="left"/>
-        <rect x="10" y="10" width="20" height="20" fill="${colors[4]}" stroke="#ccc" stroke-width="1" data-face="center"/>
-        <text class="tooth-number" x="20" y="54" font-size="9">${num}</text>
-      </g>`;
-    }
-
-    tc.innerHTML = `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-          <h4 style="font-weight:600">Odontograma</h4>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${Object.entries(condLabels).map(([k,v]) => `
-              <button class="btn btn-sm ${selectedCondition===k?'btn-primary':'btn-secondary'}" data-cond="${k}" style="font-size:.72rem;padding:5px 10px;${selectedCondition!==k?'background:'+conditions[k]+';border-color:'+conditions[k]:''}">
-                ${v}
-              </button>`).join('')}
-          </div>
-        </div>
-        <div class="odontogram-wrap">
-          <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:4px">Superior</div>
-          <svg viewBox="0 0 ${upperTeeth.length*48} 60" width="${upperTeeth.length*48}" style="max-width:100%">
-            ${upperTeeth.map((t,i) => `<g transform="translate(${i*48},0)">${toothSVG(t)}</g>`).join('')}
-          </svg>
-          <div style="width:100%;border-top:2px dashed var(--border);margin:8px 0"></div>
-          <svg viewBox="0 0 ${lowerTeeth.length*48} 60" width="${lowerTeeth.length*48}" style="max-width:100%">
-            ${lowerTeeth.map((t,i) => `<g transform="translate(${i*48},0)">${toothSVG(t)}</g>`).join('')}
-          </svg>
-          <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Inferior</div>
-        </div>
-      </div>`;
-
-    // Condition selector
-    tc.querySelectorAll('[data-cond]').forEach(btn => {
-      btn.addEventListener('click', () => { selectedCondition = btn.dataset.cond; renderOdonto(); });
-    });
-
-    // Tooth click
-    tc.querySelectorAll('.tooth polygon, .tooth rect').forEach(el => {
-      el.addEventListener('click', (e) => {
-        const toothG = e.target.closest('.tooth');
-        const num = parseInt(toothG.dataset.tooth);
-        const face = e.target.dataset.face;
-        if (!odontoData[num]) odontoData[num] = {};
-        odontoData[num][face] = odontoData[num][face] === selectedCondition ? 'healthy' : selectedCondition;
-        saveOdontogram(patientId, odontoData);
-        renderOdonto();
-      });
-      el.style.cursor = 'pointer';
-    });
-  }
-  renderOdonto();
+  renderOdontogramModule(tc, patientId);
 }
 
 function renderFotos(tc, patientId, photos) {
@@ -236,14 +171,15 @@ function renderFotos(tc, patientId, photos) {
 
   document.getElementById('addPhotoBtn')?.addEventListener('click', () => document.getElementById('photoInput').click());
   document.getElementById('photoInput')?.addEventListener('change', (e) => {
-    Array.from(e.target.files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        savePhoto({ patientId, data: ev.target.result, category: 'Clínica', name: file.name });
+    Array.from(e.target.files).forEach(async (file) => {
+      try {
+        const compressed = await compressImage(file, 1200, 0.78);
+        savePhoto({ patientId, data: compressed, category: 'Clínica', name: file.name });
         toast.success('Foto adicionada!');
         renderFotos(tc, patientId, getPhotos(patientId));
-      };
-      reader.readAsDataURL(file);
+      } catch {
+        toast.error('Erro ao processar imagem');
+      }
     });
   });
 }
@@ -262,7 +198,7 @@ function renderTratamentos(tc, patientId, treatments) {
             <div style="font-size:.8rem;color:var(--text-secondary)">${escapeHTML(t.dentist)} · Início: ${formatDate(t.startDate)}</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
               <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-                <div style="height:100%;width:${(t.completedSessions/t.totalSessions)*100}%;background:var(--primary);border-radius:3px;transition:width .3s"></div>
+                <div style="height:100%;width:${(t.completedSessions/Math.max(1,t.totalSessions))*100}%;background:var(--primary);border-radius:3px;transition:width .3s"></div>
               </div>
               <span style="font-size:.75rem;font-weight:600;color:var(--text-secondary)">${t.completedSessions}/${t.totalSessions}</span>
             </div>
@@ -292,7 +228,7 @@ function renderTratamentos(tc, patientId, treatments) {
     `, footer: `<button class="btn btn-secondary" onclick="document.querySelector('.modal-backdrop')?.remove()">Cancelar</button>
       <button class="btn btn-primary" id="saveTrBtn">Salvar</button>` });
     modal.querySelector('#saveTrBtn').onclick = () => {
-      saveTreatment({ patientId, procedure: modal.querySelector('#trProc').value, totalSessions: +modal.querySelector('#trSess').value,
+      saveTreatment({ patientId, procedure: modal.querySelector('#trProc').value, totalSessions: Math.max(1, +modal.querySelector('#trSess').value || 1),
         completedSessions: 0, value: +modal.querySelector('#trValue').value, paid: 0, dentist: modal.querySelector('#trDentist').value,
         status: 'in_progress', startDate: new Date().toISOString() });
       closeAllModals(); toast.success('Tratamento criado!');
@@ -442,7 +378,6 @@ function renderDocumentos(tc, patientId, documents) {
   `;
 
   // Adicionar documento
-  let selectedDocType = 'Outro';
   document.getElementById('addDocBtn')?.addEventListener('click', () => {
     const modal = openModal({
       title: 'Adicionar Documento',
@@ -492,11 +427,9 @@ function renderDocumentos(tc, patientId, documents) {
       if (!doc) return;
       
       if (doc.mimeType === 'application/pdf') {
-        // Abre PDF em nova aba
         const win = window.open();
         win.document.write(`<iframe src="${doc.data}" style="width:100%;height:100%;border:none;" frameborder="0"></iframe>`);
       } else {
-        // Abre imagem em modal fullscreen
         openModal({
           title: doc.name,
           size: 'lg',
