@@ -355,11 +355,13 @@ export async function initStore() {
     }
   }
 
-  // 3. FALLBACK FINAL: Gera dados demo (sem supabase e sem dados locais)
-  _data = seedDemoData();
+  // 3. FALLBACK FINAL: Estrutura inicial limpa (sem dados fictícios e sem auto-sync perigoso)
+  console.log('⚠️ Nenhum dado encontrado. Inicializando estrutura segura...');
+  _data = getEmptyInitialData();
   migrateUsers(_data);
-  saveAll(_data);
-  console.log('Criados dados demo de fallback.');
+  localStorage.setItem(STORE_KEY, JSON.stringify(_data));
+  // ATENÇÃO: NÃO chamamos saveAll(_data) nem syncToServer() aqui
+  // para NUNCA sincronizar dados vazios ou de teste para o Supabase em caso de instabilidade de rede.
   subscribeRealtime();
   
   return _data;
@@ -389,19 +391,19 @@ function migrateUsers(data) {
       { id: generateId(), name: 'Administrador', role: 'admin', password: '123', permissions: allPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
       { id: generateId(), name: 'Recepção', role: 'recepcao', password: '123', permissions: recepPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
     ];
-    // Cria um usuário para cada dentista cadastrado
-    const dentists = data.settings.dentists || [];
-    dentists.forEach(d => {
-      const exists = data.settings.users.find(u => u.dentistId === d.id);
-      if (!exists) {
-        data.settings.users.push({
-          id: generateId(), name: d.name, role: 'dentista', password: '123',
-          permissions: ['portal'], dentistId: d.id,
-          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
-        });
-      }
-    });
   }
+  // Cria um usuário para cada dentista cadastrado (caso ainda não exista)
+  const dentists = data.settings.dentists || [];
+  dentists.forEach(d => {
+    const exists = data.settings.users.find(u => u.dentistId === d.id || u.name === d.name);
+    if (!exists) {
+      data.settings.users.push({
+        id: generateId(), name: d.name, role: 'dentista', password: '123',
+        permissions: ['portal'], dentistId: d.id,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      });
+    }
+  });
   // Garante novas coleções
   if (!data.documents) data.documents = [];
   if (!data.inventoryNotifications) data.inventoryNotifications = [];
@@ -752,110 +754,40 @@ export function saveTreatment(t) {
   saveAll(d); return t;
 }
 
-// ─── Dados Demo ──────────────────────────────────────────
-function seedDemoData() {
-  const now = new Date();
-  const y = now.getFullYear(), m = now.getMonth();
-  const patients = [
-    { id:'p1',name:'Maria Silva Santos',cpf:'12345678901',phone:'11987654321',email:'maria@email.com',birth:'1985-03-15',gender:'F',address:'Rua das Flores, 123 - São Paulo/SP',status:'active',tags:['Particular','VIP'],notes:'Paciente desde 2020' },
-    { id:'p2',name:'João Carlos Oliveira',cpf:'98765432100',phone:'11976543210',email:'joao@email.com',birth:'1978-07-22',gender:'M',address:'Av. Paulista, 456 - São Paulo/SP',status:'active',tags:['Convênio'],notes:'Convênio Amil' },
-    { id:'p3',name:'Ana Beatriz Ferreira',cpf:'45678912300',phone:'11965432109',email:'ana@email.com',birth:'1992-11-08',gender:'F',address:'Rua Augusta, 789 - São Paulo/SP',status:'active',tags:['Particular'],notes:'' },
-    { id:'p4',name:'Carlos Eduardo Lima',cpf:'78912345600',phone:'11954321098',email:'carlos@email.com',birth:'1968-01-30',gender:'M',address:'Rua Oscar Freire, 321 - São Paulo/SP',status:'active',tags:['Particular'],notes:'Tratamento ortodôntico em andamento' },
-    { id:'p5',name:'Juliana Costa Pereira',cpf:'32165498700',phone:'11943210987',email:'juliana@email.com',birth:'2000-05-12',gender:'F',address:'Av. Brasil, 654 - São Paulo/SP',status:'inactive',tags:['Convênio'],notes:'Mudou de cidade' },
-    { id:'p6',name:'Roberto Almeida Souza',cpf:'65498732100',phone:'11932109876',email:'roberto@email.com',birth:'1955-09-03',gender:'M',address:'Rua Consolação, 987 - São Paulo/SP',status:'active',tags:['Particular','VIP'],notes:'Implantes - acompanhamento semestral' },
-    { id:'p7',name:'Fernanda Rodrigues',cpf:'14725836900',phone:'11921098765',email:'fernanda@email.com',birth:'1990-12-25',gender:'F',address:'Rua Haddock Lobo, 147 - São Paulo/SP',status:'active',tags:['Particular'],notes:'' },
-    { id:'p8',name:'Lucas Martins',cpf:'25836914700',phone:'11910987654',email:'lucas@email.com',birth:'1995-04-18',gender:'M',address:'Av. Rebouças, 258 - São Paulo/SP',status:'active',tags:['Convênio'],notes:'Convênio Bradesco Dental' },
-  ].map(p => ({ ...p, createdAt: new Date(y, m - 3, 1).toISOString(), updatedAt: new Date().toISOString() }));
-
-  const procedures = ['Limpeza','Restauração','Extração','Canal','Clareamento','Implante','Ortodontia','Prótese','Avaliação','Raio-X'];
-  const dentists = [
-    { id: generateId(), name: 'Dra. Helena Souza', photo: null, type: 'fixo' },
-    { id: generateId(), name: 'Dr. Ricardo Mendes', photo: null, type: 'freelancer' }
-  ];
-  const statuses = ['confirmed','pending','completed','cancelled'];
-
-  const appointments = [];
-  for (let i = -20; i < 15; i++) {
-    const dt = new Date(y, m, now.getDate() + i);
-    const count = Math.floor(Math.random() * 4) + 1;
-    for (let j = 0; j < count; j++) {
-      const h = 8 + Math.floor(Math.random() * 10);
-      const pt = patients[Math.floor(Math.random() * patients.length)];
-      const st = i < 0 ? (Math.random() > .15 ? 'completed' : 'cancelled') : (i === 0 ? 'confirmed' : (Math.random() > .3 ? 'confirmed' : 'pending'));
-      appointments.push({
-        id: generateId(), patientId: pt.id, patientName: pt.name,
-        date: `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`,
-        time: `${String(h).padStart(2,'0')}:${Math.random()>.5?'00':'30'}`,
-        duration: 30 + Math.floor(Math.random() * 4) * 15,
-        procedure: procedures[Math.floor(Math.random() * procedures.length)],
-        dentist: dentists[Math.floor(Math.random() * dentists.length)].name,
-        status: st, notes: '',
-        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
-      });
-    }
-  }
-
-  const categories = ['Material','Aluguel','Salário','Marketing','Manutenção','Outros'];
-  const payMethods = ['PIX','Cartão Crédito','Cartão Débito','Dinheiro','Boleto'];
-  const transactions = [];
-  for (let i = 5; i >= 0; i--) {
-    const month = m - i;
-    for (let j = 0; j < 15; j++) {
-      const day = Math.floor(Math.random() * 28) + 1;
-      const isIncome = Math.random() > .35;
-      const pt = patients[Math.floor(Math.random() * patients.length)];
-      transactions.push({
-        id: generateId(), type: isIncome ? 'income' : 'expense',
-        date: `${y}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,
-        amount: isIncome ? (Math.floor(Math.random() * 30) + 1) * 100 : (Math.floor(Math.random() * 15) + 1) * 50,
-        description: isIncome ? procedures[Math.floor(Math.random() * procedures.length)] : categories[Math.floor(Math.random() * categories.length)],
-        category: isIncome ? 'Procedimento' : categories[Math.floor(Math.random() * categories.length)],
-        patientId: isIncome ? pt.id : null, patientName: isIncome ? pt.name : null,
-        method: payMethods[Math.floor(Math.random() * payMethods.length)],
-        status: Math.random() > .1 ? 'paid' : 'pending',
-        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
-      });
-    }
-  }
-
-  const inventory = [
-    { id:'inv1',name:'Resina Composta Z350',category:'Material',qty:25,minQty:10,unit:'unidade',cost:85,expiry:`${y+1}-06-15`,updatedAt:new Date().toISOString() },
-    { id:'inv2',name:'Anestésico Lidocaína 2%',category:'Material',qty:50,minQty:20,unit:'tubete',cost:12,expiry:`${y}-12-30`,updatedAt:new Date().toISOString() },
-    { id:'inv3',name:'Luvas de Procedimento M',category:'Descartável',qty:500,minQty:200,unit:'unidade',cost:0.35,expiry:`${y+2}-01-01`,updatedAt:new Date().toISOString() },
-    { id:'inv4',name:'Fio de Sutura 4-0',category:'Material',qty:8,minQty:15,unit:'unidade',cost:22,expiry:`${y+1}-03-20`,updatedAt:new Date().toISOString() },
-    { id:'inv5',name:'Cimento Ionômero de Vidro',category:'Material',qty:12,minQty:5,unit:'frasco',cost:65,expiry:`${y+1}-09-10`,updatedAt:new Date().toISOString() },
-    { id:'inv6',name:'Broca Diamantada 1012',category:'Instrumento',qty:30,minQty:10,unit:'unidade',cost:8.5,expiry:null,updatedAt:new Date().toISOString() },
-    { id:'inv7',name:'Sugador Descartável',category:'Descartável',qty:150,minQty:100,unit:'unidade',cost:0.15,expiry:null,updatedAt:new Date().toISOString() },
-    { id:'inv8',name:'Algodão Rolete',category:'Descartável',qty:3,minQty:5,unit:'pacote',cost:6,expiry:null,updatedAt:new Date().toISOString() },
-  ];
-
-  const clinicalRecords = [
-    { id:'cr1',patientId:'p1',date:new Date(y,m-2,10).toISOString(),procedure:'Limpeza',dentist:'Dra. Helena Souza',notes:'Limpeza completa realizada. Gengiva saudável.',tooth:null,updatedAt:new Date().toISOString() },
-    { id:'cr2',patientId:'p1',date:new Date(y,m-1,5).toISOString(),procedure:'Restauração',dentist:'Dra. Helena Souza',notes:'Restauração em resina no dente 36, face oclusal.',tooth:'36',updatedAt:new Date().toISOString() },
-    { id:'cr3',patientId:'p1',date:new Date(y,m,2).toISOString(),procedure:'Clareamento',dentist:'Dr. Ricardo Mendes',notes:'1ª sessão de clareamento a laser. Próxima em 15 dias.',tooth:null,updatedAt:new Date().toISOString() },
-    { id:'cr4',patientId:'p2',date:new Date(y,m-1,20).toISOString(),procedure:'Avaliação',dentist:'Dr. Ricardo Mendes',notes:'Avaliação geral. Indicado tratamento de canal no dente 46.',tooth:'46',updatedAt:new Date().toISOString() },
-    { id:'cr5',patientId:'p2',date:new Date(y,m,1).toISOString(),procedure:'Canal',dentist:'Dr. Ricardo Mendes',notes:'Início do tratamento de canal dente 46. Primeira etapa concluída.',tooth:'46',updatedAt:new Date().toISOString() },
-  ];
-
-  const treatments = [
-    { id:'tr1',patientId:'p1',procedure:'Clareamento a Laser',status:'in_progress',totalSessions:3,completedSessions:1,value:1500,paid:500,dentist:'Dr. Ricardo Mendes',startDate:new Date(y,m,2).toISOString(),updatedAt:new Date().toISOString() },
-    { id:'tr2',patientId:'p2',procedure:'Tratamento de Canal - Dente 46',status:'in_progress',totalSessions:3,completedSessions:1,value:1200,paid:400,dentist:'Dr. Ricardo Mendes',startDate:new Date(y,m,1).toISOString(),updatedAt:new Date().toISOString() },
-    { id:'tr3',patientId:'p4',procedure:'Ortodontia - Aparelho Fixo',status:'in_progress',totalSessions:24,completedSessions:8,value:6000,paid:2000,dentist:'Dra. Helena Souza',startDate:new Date(y,m-8,15).toISOString(),updatedAt:new Date().toISOString() },
-    { id:'tr4',patientId:'p1',procedure:'Limpeza Semestral',status:'completed',totalSessions:1,completedSessions:1,value:250,paid:250,dentist:'Dra. Helena Souza',startDate:new Date(y,m-2,10).toISOString(),updatedAt:new Date().toISOString() },
-  ];
-
+// ─── Dados Iniciais Seguros (Sem mock para evitar contaminação) ──
+function getEmptyInitialData() {
   const allPerms = ['dashboard','atendimentos','pacientes','agenda','financeiro','estoque','relatorios','configuracoes','whatsapp','dentistas'];
   const recepPerms = ['dashboard','atendimentos','pacientes','agenda','estoque','configuracoes','whatsapp','dentistas'];
   const defaultUsers = [
     { id: generateId(), name: 'Administrador', role: 'admin', password: '123', permissions: allPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: generateId(), name: 'Recepção', role: 'recepcao', password: '123', permissions: recepPerms, dentistId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ];
-  // User para cada dentista
-  dentists.forEach(d => {
-    defaultUsers.push({ id: generateId(), name: d.name, role: 'dentista', password: '123', permissions: ['portal'], dentistId: d.id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-  });
 
-  return { patients, appointments, transactions, inventory, clinicalRecords, treatments, photos: [], documents: [], odontograms: {}, attendances: [], inventoryNotifications: [], systemLogs: [], _deletions: [], settings: { clinicName: 'HS Corp', dentists, users: defaultUsers } };
+  return {
+    patients: [],
+    appointments: [],
+    transactions: [],
+    inventory: [],
+    clinicalRecords: [],
+    treatments: [],
+    photos: [],
+    documents: [],
+    odontograms: {},
+    attendances: [],
+    cancelledAttendances: [],
+    inventoryNotifications: [],
+    systemLogs: [],
+    _deletions: [],
+    settings: {
+      clinicName: 'HS Corp',
+      dentists: [],
+      users: defaultUsers
+    }
+  };
+}
+
+function seedDemoData() {
+  return getEmptyInitialData();
 }
 
 export function exportData() {
